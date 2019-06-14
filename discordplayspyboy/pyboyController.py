@@ -36,9 +36,10 @@ class PyBoyController():
     
     self._fps = 60
 
-  async def press_button(self, button_name):
+  async def press_button(self, button_name, afterTicks:int=7):
     """Presses button and returns gif of results
     button_name: string of the specified button
+    afterTicks: number of ticks to do after the button is pressed
     """
     button_events = self._buttons.get(button_name)
     if None:
@@ -47,6 +48,8 @@ class PyBoyController():
     
     self._screenShots = []
     self._press_button
+    for _ in range(afterTicks):
+      self._tick()
     self._makeGif()
     
     return self._screenShotGif
