@@ -36,32 +36,32 @@ class PyBoyController():
     
     self._fps = 60
 
-  async def press_button(self, button_name, afterTicks:int=7):
+  async def press_button(self, buttonName, afterTicks:int=7):
     """Presses button and returns gif of results
     button_name: string of the specified button
     afterTicks: number of ticks to do after the button is pressed
     """
-    button_events = self._buttons.get(button_name)
+    button_events = self._buttons.get(buttonName)
     if None:
-      logger.critical("Incorrect button selection: {}".format(button_name)
+      logger.critical("Incorrect button selection: {}".format(buttonName)
       return None
     
     self._screenShots = []
-    self._press_button
+    self._press_button()
     for _ in range(afterTicks):
       self._tick()
     self._makeGif()
     
     return self._screenShotGif
 
-  async def _press_button(self, button_events):
+  async def _press_button(self, buttonEvents):
     """Presses the specified button
     button_events: tuple(press<button>, release<button>
     """
     self._tick()
-    self._pyboy.sendInput(button_events[0])
+    self._pyboy.sendInput(buttonEvents[0])
     self._tick()
-    self._pyboy.sendInput(button_events[1])
+    self._pyboy.sendInput(buttonEvents[1])
     return True
 
   async def _tick(self):
