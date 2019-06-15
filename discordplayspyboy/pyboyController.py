@@ -24,60 +24,70 @@ class PyBoyController():
     "b": (windowevent.PRESS_BUTTON_B, windowevent.RELEASE_BUTTON_B),
   }
 
-  def __init__(self, gameROM, bootROM, tempDir="/tmp/discordPlaysPyBoy"):
-    self._pyboy = PyBoy('SDL2', 3, gameROM, bootROM)
+  def __init__(self, gameROM, bootROM="ROMs/DMG_ROM.bin", tempDir="/tmp/discordPlaysPyBoy"):
+    self._pyboy = PyBoy(None, 3, gameROM, bootROM)
     self._pyboy.setEmulationSpeed(False)
 
     self._tempDir = tempDir
-    os.mkdir(self._tempDir)
+    if not os.path.exists(self._tempDir):
+      os.mkdir(self._tempDir)
     
     self._screenShots = []
     self._screenShotGif = "{}/screenshot.gif".format(self._tempDir)
     
     self._fps = 60
 
-  async def press_button(self, buttonName, afterTicks:int=7):
+  def availableButtons(self):
+    return self._buttons.keys()
+
+  async def pressButton(self, buttonName, seconds:int=7):
     """Presses button and returns gif of results
     button_name: string of the specified button
     afterTicks: number of ticks to do after the button is pressed
     """
-    button_events = self._buttons.get(buttonName)
-    if None:
-      logger.critical("Incorrect button selection: {}".format(buttonName)
+    buttonEvents = self._buttons.get(buttonName)
+    if buttonEvents is None:
+      logger.critical("PyBoy: Incorrect button selection: {}".format(buttonName))
       return None
     
     self._screenShots = []
-    self._press_button()
-    for _ in range(afterTicks):
-      self._tick()
-    self._makeGif()
+    await self._pressButton(buttonEvents)
+    await self._tick(seconds*self._fps)
+    await self._makeGif()
     
     return self._screenShotGif
 
-  async def _press_button(self, buttonEvents):
+  async def _pressButton(self, buttonEvents):
     """Presses the specified button
     button_events: tuple(press<button>, release<button>
     """
-    self._tick()
+    logger.info("PyBoy: Pressing button: {}".format(buttonEvents[0]))
+    await self._tick()
     self._pyboy.sendInput(buttonEvents[0])
-    self._tick()
+    logger.info("PyBoy: Releasing button: {}".format(buttonEvents[1]))
+    await self._tick()
     self._pyboy.sendInput(buttonEvents[1])
     return True
 
-  async def _tick(self):
-    self._pyboy.tick()
-    self._take_screen_shot()
+  async def _tick(self, numTicks=1):
+    logger.info("PyBoy: Moving forward {} ticks".format(numTicks))
+    for _ in range(numTicks):
+      self._pyboy.tick()
+      await self._take_screen_shot()
 
   async def _makeGif(self):
+    logger.info("PyBoy: Creating screenshot GIF")
+    logger.info("PyBoy: {}".format(type(self._screenShots[0])))
     self._screenShots[0].save(
       self._screenShotGif,
-      save_all=True, interlace=False,
-      loop=0, optimize=True,
-      append_images=self._screenShotGif[1:],
-      duration=int(round(1000 / self._fps, -1)))    
+      format='GIF',
+      loop=0, save_all=True,
+      append_images=self._screenShots[1:],
+      duration=int(round(len(self._screenShotGif) / self._fps)))    
 
   async def _take_screen_shot(self):
     """Takes screen shot of emulator
     """
-    self._screenShots.append(Image.frombytes(self._pyboy.getScreenBufferFormat, (160, 144), self._pyboy.getScreenBuffer))
+    logger.info("PyBoy: Taking screenshot")
+    self._screenShots.append(Image.frombytes(self._pyboy.getScreenBufferFormat(), (160, 144), self._pyboy.getScreenBuffer()))
 

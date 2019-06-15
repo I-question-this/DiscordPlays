@@ -1,4 +1,6 @@
+# Project specific
 ROMs
+config.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
