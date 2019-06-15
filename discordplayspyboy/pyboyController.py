@@ -62,11 +62,12 @@ class PyBoyController():
     button_events: tuple(press<button>, release<button>
     """
     logger.info("PyBoy: Pressing button: {}".format(buttonEvents[0]))
-    await self._tick()
+    await self._tick(2)
     self._pyboy.sendInput(buttonEvents[0])
     logger.info("PyBoy: Releasing button: {}".format(buttonEvents[1]))
-    await self._tick()
+    await self._tick(2)
     self._pyboy.sendInput(buttonEvents[1])
+    await self._tick(2)
     return True
 
   async def _tick(self, numTicks=1):
