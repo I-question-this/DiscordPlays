@@ -11,7 +11,7 @@ __title__ = 'discordplayspyboy'
 __author__ = 'i-question-this'
 __license__ = 'GPL-3.0'
 __copyright__ = 'Copyright 2019 i-question-this'
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 from collections import namedtuple
 

@@ -35,12 +35,12 @@ class PyBoyController():
     self._screenShots = []
     self._screenShotGif = "{}/screenshot.gif".format(self._tempDir)
     
-    self._fps = 60
+    self._fps = 60.0
 
   def availableButtons(self):
     return self._buttons.keys()
 
-  async def pressButton(self, buttonName, seconds:int=7):
+  async def pressButton(self, buttonName, seconds:int=100):
     """Presses button and returns gif of results
     button_name: string of the specified button
     afterTicks: number of ticks to do after the button is pressed
@@ -52,7 +52,7 @@ class PyBoyController():
     
     self._screenShots = []
     await self._pressButton(buttonEvents)
-    await self._tick(seconds*self._fps)
+    await self._tick(int(round(seconds*self._fps)))
     await self._makeGif()
     
     return self._screenShotGif
@@ -77,7 +77,6 @@ class PyBoyController():
 
   async def _makeGif(self):
     logger.info("PyBoy: Creating screenshot GIF")
-    logger.info("PyBoy: {}".format(type(self._screenShots[0])))
     self._screenShots[0].save(
       self._screenShotGif,
       format='GIF',
