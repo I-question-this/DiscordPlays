@@ -93,7 +93,7 @@ class Client(discord.Client):
     logger.info("Bot: recived message \"{}\"".format(" ".join(args)))
     if args[0] in self.controller.availableButtons():
       await self.voteForButton(args[0], message.author)
-    elif args[0] == "setvotingtime":
+    elif args[0] == "setvotingperiod":
       try:
         args[1] = int(args[1])
       except ValueError:
