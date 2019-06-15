@@ -9,7 +9,9 @@ Voting Booth for keeping track of votes
 import random
 
 class VotingBox():
-  votes = {}
+  
+  def __init__(self):
+    self.votes = {}
   
   def castVote(self, user, button):
     if self.votes.get(user) is None:
