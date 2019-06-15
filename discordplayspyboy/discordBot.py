@@ -26,9 +26,40 @@ class Client(discord.Client):
   votingBox = VotingBox()
 
   # Helper methods
+  ## Voting
   def castVote(self, author, button):
     logger.info("Bot: '{}' cast vote for '{}'".format(author, button))
     self.votingBox.castVote(author, button)
+
+  async def voteForButton(self, button, author):
+    # Quit if votes can not be cast at this time
+    if not self.isVotingPeriod:
+      return None
+    # Vote
+    if not self.isFirstVote:
+      self.castVote(author, button)
+    else:
+      # Turn off isFirstVote
+      self.isFirstVote = False
+      logger.info("Bot: User '{}' started voting period".format(author))
+      self.castVote(author, button)
+      # Wait for voting period to end
+      time.sleep(self.votingPeriodLength)
+      self.isVotingPeriod = False
+      logger.info("Bot: Voting is over")
+      # Rest isFirstVote
+      self.isFirstVote = True
+      # Get the majority vote
+      button = self.votingBox.majorityVote()
+      # Reset voting box
+      self.votingBox = VotingBox()
+      if button is not None:
+        await self.pushButton(button)
+      else:
+        logger.critical("Bot: No votes cast...somehow")
+      # Turning voting back on
+      self.isVotingPeriod = True
+      logger.info("Bot: Voting is starting")
 
   async def ourChannel(self):
     for channel in self.get_all_channels():
@@ -54,41 +85,23 @@ class Client(discord.Client):
       await self.dedicatedChannel.send("", file=discord.File(screenShotPath, "screenshot.gif"))
 
   async def on_message(self, message):
-    # Quit if votes can not be cast at this time
-    if not self.isVotingPeriod:
-      return
     # Quit if the message did not come from the dedicated channel
     if message.channel.name != self.dedicatedChannelName:
-      return
-    # Remove case senstivity
-    button = message.content.lower()
-    # Check if an actual button
-    if button in self.controller.availableButtons():
-      if not self.isFirstVote:
-        self.castVote(message.author, button)
-      else:
-        # Turn off isFirstVote
-        self.isFirstVote = False
-        logger.info("Bot: User '{}' started voting period".format(message.author))
-        self.castVote(message.author, button)
-        # Wait for voting period to end
-        time.sleep(self.votingPeriodLength)
-        self.isVotingPeriod = False
-        logger.info("Bot: Voting is over")
-        # Rest isFirstVote
-        self.isFirstVote = True
-        # Get the majority vote
-        button = self.votingBox.majorityVote()
-        # Reset voting box
-        self.votingBox = VotingBox()
-        if button is not None:
-          await self.pushButton(button)
-        else:
-          logger.critical("Bot: No votes cast...somehow")
-        # Turning voting back on
-        self.isVotingPeriod = True
-        logger.info("Bot: Voting is starting")
-
+      return None
+    # Interpret message 
+    args = message.content.lower().split()
+    logger.info("Bot: recived message \"{}\"".format(" ".join(args)))
+    if args[0] in self.controller.availableButtons():
+      await self.voteForButton(args[0], message.author)
+    elif args[0] == "setvotingperiod":
+      try:
+        args[1] = int(args[1])
+      except ValueError:
+        await self.dedicatedChannel.send("{} can not be interpreted as an integer".format(args[1]))
+      self.votingPeriodLength = args[1]
+      logger.info("Bot: votingPeriodLength changed to {}".format(self.votingPeriodLength))
+      await self.dedicatedChannel.send("Voting period length changed to {} seconds".format(self.votingPeriodLength)) 
+ 
   async def cleanup(self):
     self.controller.stop()
 
