@@ -27,6 +27,6 @@ class VotingBox():
       return None 
     
     maxVote = max(self._voteCounts.values())
-    
-    return random.choice([k for k,v in self._voteCounts.items() if v == maxVote])
+    majorityVotes = [k for k,v in self._voteCounts.items() if v == maxVote]
+    return random.choice(majorityVotes)
 
