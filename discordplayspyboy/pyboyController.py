@@ -57,6 +57,9 @@ class PyBoyController():
     
     return self._screenShotGif
 
+  def stop(self):
+    self._pyboy.stop(save=True)
+
   async def _pressButton(self, buttonEvents):
     """Presses the specified button
     button_events: tuple(press<button>, release<button>
