@@ -91,6 +91,5 @@ class PyBoyController():
   async def _take_screen_shot(self):
     """Takes screen shot of emulator
     """
-    logger.info("PyBoy: Taking screenshot")
     self._screenShots.append(Image.frombytes(self._pyboy.getScreenBufferFormat(), (160, 144), self._pyboy.getScreenBuffer()))
 
