@@ -47,16 +47,21 @@ class Client(discord.Client):
       time.sleep(self.votingPeriodLength)
       self.isVotingPeriod = False
       logger.info("Bot: Voting is over")
-      # Rest isFirstVote
-      self.isFirstVote = True
       # Get the majority vote
-      button = self.votingBox.majorityVote()
-      # Reset voting box
-      self.votingBox = VotingBox()
+      button = self.votingBox.majorityVoteResult()
       if button is not None:
         await self.pushButton(button)
+        messageParts = ["Voting Results:"]
+        messageParts.extend(self.votingBox.voteCounts())
+        messageParts.append("Button Pressed: '{}'".format(button))
+        logger.info("Bot: {}".format(". ".join(messageParts)))
+        await self.dedicatedChannel.send("\n".join(messageParts))
       else:
         logger.critical("Bot: No votes cast...somehow")
+      # Reset voting box
+      self.votingBox = VotingBox()
+      # Reset isFirstVote
+      self.isFirstVote = True
       # Turning voting back on
       self.isVotingPeriod = True
       logger.info("Bot: Voting is starting")
@@ -73,7 +78,7 @@ class Client(discord.Client):
     screenShotPath = await self.controller.pressButton(button)
     logger.info("Bot: Sending screenshot {}".format(screenShotPath))
     if self.dedicatedChannel is not None:
-      await self.dedicatedChannel.send("Button {} pressed".format(button), file=discord.File(screenShotPath, "screenshot.gif"))
+      await self.dedicatedChannel.send("".format(button), file=discord.File(screenShotPath, "screenshot.gif"))
 
   # Event registration
   async def on_ready(self):

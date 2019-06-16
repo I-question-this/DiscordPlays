@@ -9,24 +9,24 @@ Voting Booth for keeping track of votes
 import random
 
 class VotingBox():
-  
   def __init__(self):
-    self.votes = {}
+    self._userVotes = {}
+    self._voteCounts = {}
   
-  def castVote(self, user, button):
-    if self.votes.get(user) is None:
-      self.votes[user] = button
+  def castVote(self, user, vote):
+    if self._userVotes.get(user) is None:
+      self._userVotes[user] = vote
+      self._voteCounts[vote] = 1 + self._voteCounts.get(vote, 0)
 
-  def majorityVote(self):
+  def voteCounts(self):
+    return ("{}: {}".format(k,v) for k,v in self._voteCounts.items())
+
+  def majorityVoteResult(self):
     # Check that votes were actually cast
-    if len(self.votes) == 0:
+    if len(self._voteCounts) == 0:
       return None 
     
-    counts = {}
-    for button in self.votes.values():
-      counts[button] = 1 + counts.get(button, 0)
-     
-    maxVote = max(counts.values())
+    maxVote = max(self._voteCounts.values())
     
-    return random.choice([k for k,v in counts.items() if v == maxVote])
+    return random.choice([k for k,v in self._voteCounts.items() if v == maxVote])
 
