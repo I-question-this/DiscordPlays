@@ -102,7 +102,8 @@ class Client(discord.Client):
       logger.info("Bot: votingPeriodLength changed to {}".format(self.votingPeriodLength))
       await self.dedicatedChannel.send("Voting period length changed to {} seconds".format(self.votingPeriodLength)) 
  
-  async def cleanup(self):
+  async def close(self):
+    logger.info("Bot: Shutting down controller")
     self.controller.stop()
 
 if __name__ == "__main__":
