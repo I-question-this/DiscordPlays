@@ -30,7 +30,15 @@ async def isVotingPeriodCheck(ctx):
 
 ## Buttons
 async def buttonPush(ctx):
-  await ctx.bot.voteForButton(ctx.invoked_with, ctx.message.author, ctx.message.channel)
+  iterations = " ".join(ctx.message.content.split()[1:])
+  if len(iterations) == 0:
+    iterations = 1
+  else:
+    try:
+      iterations = min(abs(int(iterations)), 10)
+    except ValueError:
+      await ctx.message.channel.send("Can not interpret '{}' as an integer".format(newLength))
+  await ctx.bot.voteForButton((ctx.invoked_with, iterations), ctx.message.author, ctx.message.channel)
 
 ## Controller
 async def listROMs(ctx):
@@ -54,7 +62,7 @@ async def setVotingPeriodLength(ctx):
   try:
     newLength = max(int(newLength), 1)
   except ValueError:
-    await ctx.message.channel.send("Can not interpret '{}' as integer".format(newLength))
+    await ctx.message.channel.send("Can not interpret '{}' as an integer".format(newLength))
   
   ctx.bot.votingPeriodLength = newLength
   logger.info("Changed votingPeriodLength to '{}'".format(newLength))
@@ -78,27 +86,29 @@ class Bot(commands.Bot):
     logger.info("Bot: '{}' cast vote for '{}'".format(author, button))
     self.votingBox.castVote(author, button)
 
-  async def voteForButton(self, button, author, channel):
+  async def voteForButton(self, vote, author, channel):
     # Quit if votes can not be cast at this time
     if not self.isVotingPeriod:
       return None
     # Vote
     if not self.isFirstVote:
-      self.castVote(author, button)
+      self.castVote(author, vote)
     else:
       # Turn off isFirstVote
       self.isFirstVote = False
       logger.info("Bot: User '{}' started voting period".format(author))
-      self.castVote(author, button)
+      self.castVote(author, vote)
       # Wait for voting period to end
       time.sleep(self.votingPeriodLength)
       self.isVotingPeriod = False
       logger.info("Bot: Voting is over")
       # Get the majority vote
-      button = self.votingBox.majorityVoteResult()
-      if button is not None:
-        await self.sendVotingResults(button, channel)
-        self.controller.pressButton(button)
+      resultVote = self.votingBox.majorityVoteResult()
+      if resultVote is not None:
+        await self.sendVotingResults(resultVote, channel)
+        button, iterations = resultVote
+        for _ in range(iterations):
+          self.controller.pressButton(button)
         self.controller.runForXSeconds(10)
         await self.sendScreenShotGif(channel)
       else:

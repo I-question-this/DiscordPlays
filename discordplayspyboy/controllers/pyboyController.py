@@ -23,10 +23,10 @@ class PyBoyController(Controller):
     """
     logger.info("PyBoy: Pressing button: {}".format(button.name))
     self._pyboy.sendInput(button.pressCode)
-    self.runForXFrames(2)
+    self.runForXFrames(int(self._fps / 2))
     logger.info("PyBoy: Releasing button: {}".format(button.name))
     self._pyboy.sendInput(button.releaseCode)
-    self.runForXFrames(2)
+    self.runForXFrames(int(self._fps / 2))
     
 
 
