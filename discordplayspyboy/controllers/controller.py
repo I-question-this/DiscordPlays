@@ -109,10 +109,10 @@ class Controller(ABC):
     if numberOfFrames == 0:
       return
 
-    logger.info("{}: Running for {} frames/ {} seconds".format(
+    logger.info("{}: Running for {} frames, aka {} seconds".format(
       self.__class__.__name__, 
       numberOfFrames, 
-      self._fps / numberOfFrames
+      numberOfFrames / self._fps
     ))
 
     for _ in range(numberOfFrames):
