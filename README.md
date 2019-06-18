@@ -1,4 +1,4 @@
-# DiscordPlaysPyBoy
+# DiscordPlays
 
 ## Emulator
 [PyBoy](https://github.com/Baekalfen/PyBoy)

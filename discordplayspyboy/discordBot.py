@@ -8,11 +8,13 @@ Discord Bot
 """
 import discord
 import discord.ext.commands as commands
+import os
+import tempfile
 import time
 from functools import partial
 from . import logger
 from .config import bootROMByName, gameROMByName, gameROMs
-from .pyboyController import PyBoyController
+from .controllers.pyboyController import PyBoyController
 from .votingbox import VotingBox
 
 # Commands
@@ -28,7 +30,15 @@ async def isVotingPeriodCheck(ctx):
 
 ## Buttons
 async def buttonPush(ctx):
-  await ctx.bot.voteForButton(ctx.invoked_with, ctx.message.author, ctx.message.channel)
+  iterations = " ".join(ctx.message.content.split()[1:])
+  if len(iterations) == 0:
+    iterations = 1
+  else:
+    try:
+      iterations = min(abs(int(iterations)), 10)
+    except ValueError:
+      await ctx.message.channel.send("Can not interpret '{}' as an integer".format(newLength))
+  await ctx.bot.voteForButton((ctx.invoked_with, iterations), ctx.message.author, ctx.message.channel)
 
 ## Controller
 async def listROMs(ctx):
@@ -41,7 +51,7 @@ async def startController(ctx):
     await ctx.message.channel.send("No such ROM exists")
   else:
     await ctx.bot.startController(romName, romPath)
-    await ctx.bot.sendLastScreenShot(ctx.message.channel)
+    await ctx.bot.sendScreenShotGif(ctx.message.channel)
   
 async def stopController(ctx):
   await ctx.bot.stopController()
@@ -52,7 +62,7 @@ async def setVotingPeriodLength(ctx):
   try:
     newLength = max(int(newLength), 1)
   except ValueError:
-    await ctx.message.channel.send("Can not interpret '{}' as integer".format(newLength))
+    await ctx.message.channel.send("Can not interpret '{}' as an integer".format(newLength))
   
   ctx.bot.votingPeriodLength = newLength
   logger.info("Changed votingPeriodLength to '{}'".format(newLength))
@@ -62,8 +72,6 @@ async def setVotingPeriodLength(ctx):
 class Bot(commands.Bot):
   # The controller interface to the player
   controller = PyBoyController()
-  # Screenshots
-  lastScreenShot = None 
   # Standard messages
   idleActivity = "Nothing.gb"
   # Voting state information
@@ -78,28 +86,31 @@ class Bot(commands.Bot):
     logger.info("Bot: '{}' cast vote for '{}'".format(author, button))
     self.votingBox.castVote(author, button)
 
-  async def voteForButton(self, button, author, channel):
+  async def voteForButton(self, vote, author, channel):
     # Quit if votes can not be cast at this time
     if not self.isVotingPeriod:
       return None
     # Vote
     if not self.isFirstVote:
-      self.castVote(author, button)
+      self.castVote(author, vote)
     else:
       # Turn off isFirstVote
       self.isFirstVote = False
       logger.info("Bot: User '{}' started voting period".format(author))
-      self.castVote(author, button)
+      self.castVote(author, vote)
       # Wait for voting period to end
       time.sleep(self.votingPeriodLength)
       self.isVotingPeriod = False
       logger.info("Bot: Voting is over")
       # Get the majority vote
-      button = self.votingBox.majorityVoteResult()
-      if button is not None:
-        await self.sendVotingResults(button, channel)
-        await self.pushButton(button)
-        await self.sendLastScreenShot(channel)
+      resultVote = self.votingBox.majorityVoteResult()
+      if resultVote is not None:
+        await self.sendVotingResults(resultVote, channel)
+        button, iterations = resultVote
+        for _ in range(iterations):
+          self.controller.pressButton(button)
+        self.controller.runForXSeconds(10)
+        await self.sendScreenShotGif(channel)
       else:
         logger.critical("Bot: No votes cast...somehow")
       # Reset voting box
@@ -111,16 +122,12 @@ class Bot(commands.Bot):
       logger.info("Bot: Voting is starting")
 
   # Controller interaction
-  async def pushButton(self, button): 
-    logger.info("Bot: Pressing button: {}".format(button))
-    self.lastScreenShot = await self.controller.pressButton(button)
   
-  async def sendLastScreenShot(self, channel):
-    if self.lastScreenShot is None:
-      logger.critical("Bot: no screen shot to send")
-      return
-    logger.info("Bot: Sending screenshot {}".format(self.lastScreenShot))
-    await channel.send("", file=discord.File(self.lastScreenShot, "screenshot.gif"))
+  async def sendScreenShotGif(self, channel):
+    filePath = os.path.join(tempfile.gettempdir(), "screenshot.gif")
+    self.controller.makeGIF(filePath)
+    logger.info("Bot: Sending screenshot \"{}\"".format(filePath))
+    await channel.send("", file=discord.File(filePath, "screenshot.gif"))
 
   async def sendVotingResults(self, chosenButton, channel):
     messageParts = ["Voting Results:"]
@@ -130,13 +137,12 @@ class Bot(commands.Bot):
     await channel.send("\n".join(messageParts))
 
   async def startController(self, gameROMName, gameROMPath):
-    self.lastScreenShot = await self.controller.start(gameROMPath, bootROMByName("DMG_ROM").path)
+    self.controller.start(gameROMPath, bootROMByName("DMG_ROM").path)
     game = discord.Game(gameROMName)
     await self.change_presence(activity=game)
   
   async def stopController(self):
     self.controller.stop()
-    self.lastScreenShot = None
     game = discord.Game(self.idleActivity)
     await self.change_presence(activity=game)
 
@@ -145,7 +151,7 @@ class Bot(commands.Bot):
     # Buttons
     buttonHelpMessage = "Casts vote for button '{}'."
     buttonHelpMessage += "\nOnly usable when a ROM is running"
-    for button in self.controller.availableButtons:
+    for button in self.controller.buttonNames:
       self.add_command(
         commands.Command(
           buttonPush, 
@@ -206,6 +212,7 @@ class Bot(commands.Bot):
     )
 
   async def on_ready(self):
+    self.controller = PyBoyController()
     self.addCommands()
     # Set status
     game = discord.Game(self.idleActivity)
