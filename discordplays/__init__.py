@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 
 """
-Init file for discordplayspyboy
+Init file for discordplays
 ~~~~~~~~~~~~~~~~~~~
 :copyright: (c) 2019 i-question-this
 :license: GPL-3.0, see LICENSE for more details.
 """
 
-__title__ = 'discordplayspyboy'
+__title__ = 'discordplays'
 __author__ = 'i-question-this'
 __license__ = 'GPL-3.0'
 __copyright__ = 'Copyright 2019 i-question-this'
