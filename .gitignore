@@ -1,6 +1,6 @@
 # Project specific
 ROMs
-config.py
+token.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -1,17 +1,17 @@
 # -*- coding: utf-8 -*-
 
 """
-Init file for discordplayspyboy
+Init file for discordplays
 ~~~~~~~~~~~~~~~~~~~
 :copyright: (c) 2019 i-question-this
 :license: GPL-3.0, see LICENSE for more details.
 """
 
-__title__ = 'discordplayspyboy'
+__title__ = 'discordplays'
 __author__ = 'i-question-this'
 __license__ = 'GPL-3.0'
 __copyright__ = 'Copyright 2019 i-question-this'
-__version__ = '0.7.1'
+__version__ = '0.9.0'
 
 from collections import namedtuple
 
@@ -20,7 +20,7 @@ import logging
 
 VersionInfo = namedtuple('VersionInfo', 'major minor micro')
 
-version_info = VersionInfo(major=0, minor=7, micro=1)
+version_info = VersionInfo(major=0, minor=9, micro=0)
 
 # Set up logging for Discord
 logger = logging.getLogger('discord')
