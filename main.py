@@ -8,7 +8,6 @@ Main for Running the Discord Bot
 :license: GPL-3.0, see LICENSE for more details.
 """
 from discordplays import version_info
-from discordplays.config import TOKEN
 from discordplays.discordBot import Bot
 
 # Set up the bot
@@ -16,6 +15,11 @@ description = "Interface to emulators."
 description += "\n Version: {}.{}.{}".format(version_info.major, version_info.minor, version_info.micro)
 bot = Bot('.', description=description, case_insensitive=True)
 
+# Read the token
+with open('token.txt') as f:
+  # Strip the newline chracter
+  token = f.read().rstrip()
+
 # Run the bot
-bot.run(TOKEN)
+bot.run(token)
 
