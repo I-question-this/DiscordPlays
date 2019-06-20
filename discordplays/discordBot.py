@@ -13,8 +13,8 @@ import tempfile
 import time
 from functools import partial
 from . import logger
-from .config import bootROMByName, gameROMByName, gameROMs
 from .controllers.pyboyController import PyBoyController
+from .gamelibrary import ConsoleType, FileType, GameLibrary
 from .votingbox import VotingBox
 
 # Commands
@@ -42,17 +42,83 @@ async def buttonPush(ctx):
 
 ## Controller
 async def listROMs(ctx):
-  await ctx.message.channel.send("\n".join((rom.name for rom in gameROMs)))
+  parameters = ctx.message.content.split()[1:]
+  # Did they specify anything?
+  if len(parameters) == 0:
+    # Nope, so send everything
+    consoleTypeList = list(ConsoleType)
+    fileTypeList = list(FileType)
+  else:
+    # They have attempted to specify a console (len >= 1)
+    # Did they specify a correct console?
+    consoleType = ConsoleType.fromString(parameters[0])
+    if consoleType is None:
+      # They screwed up, so cancel
+      return None
+    else:
+      # Save the specified consoleType as the only element in a list
+      consoleTypeList = [consoleType]
+    # Did they specify a specific type of file?
+    if len(parameters) == 1:
+      # Nope, so send every file type
+      fileTypeList = list(FileType)
+    else:
+      # They have attempted to specify a file type (len >= 2)
+      # Did they specify a correct file type?
+      fileType = FileType.fromString(parameters[1])
+      if fileType is None:
+        # They screwed up, so cancel
+        return None
+      else:
+        # Save the specified fileType as the only element in a list
+        fileTypeList = [fileType]
+      # Did they throw in extra garabage, which is not allowed?
+      if len(parameters) > 2:
+        # They screwed up, so cancel
+        return None
+
+  # They either specified nothing, or correct things so send the info
+  message = ""
+  for consoleType in consoleTypeList:
+    message += "{}::\n".format(consoleType.value)
+    for fileType in fileTypeList:
+      message += "  {}:\n".format(fileType.value)
+
+      files = ctx.bot.gameLibrary.availableFiles(consoleType, fileType)
+      message += "\n".join(("    {}".format(f) for f in files))
+      message += "\n"
+
+  await ctx.message.channel.send(message)
 
 async def startController(ctx):
-  romName = " ".join(ctx.message.content.split()[1:])
-  romPath = gameROMByName(romName).path
-  if romPath is None:
-    await ctx.message.channel.send("No such ROM exists")
-  else:
-    await ctx.bot.startController(romName, romPath)
-    await ctx.bot.sendScreenShotGif(ctx.message.channel)
+  parameters = ctx.message.content.split()[1:]
+  # Check they specified <console type> <game ROM name> <boot ROM name>
+  if len(parameters) != 3:
+    # They screwed up, so cancel
+    return None
+  # Check console name
+  consoleType = ConsoleType.fromString(parameters[0])
+  if consoleType is None:
+    # They screwed up, so cancel
+    return None
+  # Construct file paths
+  gameROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.GAMES, parameters[1])
+  bootROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.BOOTS, parameters[2])
+  # Check file paths
+  if gameROMPath is None or bootROMPath is None:
+    # They screwed up, so cancel
+    return None
+  # Specification correct, start the game 
+  game = discord.Game("{}: {}".format(consoleType.value, parameters[1]))
+  await ctx.bot.change_presence(activity=game)
+  ctx.bot.controller.start(gameROMPath, bootROMPath)
+  await ctx.bot.sendScreenShotGif(ctx.message.channel)
   
+  async def startController(self, gameROMName, gameROMPath):
+    self.controller.start(gameROMPath, bootROMByName("DMG_ROM").path)
+    game = discord.Game(gameROMName)
+    await self.change_presence(activity=game)
+
 async def stopController(ctx):
   await ctx.bot.stopController()
 
@@ -72,6 +138,8 @@ async def setVotingPeriodLength(ctx):
 class Bot(commands.Bot):
   # The controller interface to the player
   controller = PyBoyController()
+  # The game library
+  gameLibrary = GameLibrary()
   # Standard messages
   idleActivity = "Nothing.gb"
   # Voting state information
@@ -121,13 +189,14 @@ class Bot(commands.Bot):
       self.isVotingPeriod = True
       logger.info("Bot: Voting is starting")
 
+
   # Controller interaction
-  
   async def sendScreenShotGif(self, channel):
     filePath = os.path.join(tempfile.gettempdir(), "screenshot.gif")
     self.controller.makeGIF(filePath)
     logger.info("Bot: Sending screenshot \"{}\"".format(filePath))
     await channel.send("", file=discord.File(filePath, "screenshot.gif"))
+
 
   async def sendVotingResults(self, chosenButton, channel):
     messageParts = ["Voting Results:"]
@@ -136,10 +205,6 @@ class Bot(commands.Bot):
     logger.info("Bot: {}".format(". ".join(messageParts)))
     await channel.send("\n".join(messageParts))
 
-  async def startController(self, gameROMName, gameROMPath):
-    self.controller.start(gameROMPath, bootROMByName("DMG_ROM").path)
-    game = discord.Game(gameROMName)
-    await self.change_presence(activity=game)
   
   async def stopController(self):
     self.controller.stop()
@@ -169,7 +234,8 @@ class Bot(commands.Bot):
       commands.Command(
         listROMs,
         name="listROMs",
-        help="List avialable ROMs"
+        help="List avialable ROMs",
+        usage="<optional: console type> <optional: file type>"
       )
     )
     self.add_command(
@@ -177,7 +243,7 @@ class Bot(commands.Bot):
         startController,
         name="startROM",
         help="Starts the specified ROM",
-        usage="<ROM name>",
+        usage="<console type> <game ROM name> <boot ROM name>",
         checks=[isControllerStopped]
       )
     )
