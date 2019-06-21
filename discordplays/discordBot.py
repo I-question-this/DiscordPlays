@@ -28,6 +28,9 @@ async def isControllerStopped(ctx):
 async def isVotingPeriodCheck(ctx):
   return ctx.bot.isVotingPeriod
 
+async def isGuildMessageCheck(ctx):
+  return ctx.message.channel.type == discord.ChannelType.text
+
 ## Buttons
 async def buttonPush(ctx):
   iterations = " ".join(ctx.message.content.split()[1:])
@@ -224,7 +227,8 @@ class Bot(commands.Bot):
           help=buttonHelpMessage.format(button),
           checks=[
             isControllerRunning,
-            isVotingPeriodCheck
+            isVotingPeriodCheck,
+            isGuildMessageCheck
           ]
         )
       )
@@ -235,7 +239,10 @@ class Bot(commands.Bot):
         listROMs,
         name="listROMs",
         help="List avialable ROMs",
-        usage="<optional: console type> <optional: file type>"
+        usage="<optional: console type> <optional: file type>",
+        checks=[
+          isGuildMessageCheck
+        ]
       )
     )
     self.add_command(
@@ -244,7 +251,10 @@ class Bot(commands.Bot):
         name="startROM",
         help="Starts the specified ROM",
         usage="<console type> <game ROM name> <boot ROM name>",
-        checks=[isControllerStopped]
+        checks=[
+          isControllerStopped,
+          isGuildMessageCheck
+        ]
       )
     )
     self.add_command(
@@ -252,7 +262,10 @@ class Bot(commands.Bot):
         stopController,
         name="stopROM",
         help="Starts the currently running ROM",
-        checks=[isControllerRunning]
+        checks=[
+          isControllerRunning,
+          isGuildMessageCheck
+        ]
       )
     )
     # Voting
@@ -261,7 +274,10 @@ class Bot(commands.Bot):
         setVotingPeriodLength,
         name="setVotingPeriodLength",
         help="Change the length of seconds for votes.\nMinimum is 1",
-        usage="<number of seconds>"
+        usage="<number of seconds>",
+        checks=[
+          isGuildMessageCheck
+        ]
       )
     )
  
