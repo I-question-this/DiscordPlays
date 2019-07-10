@@ -12,10 +12,10 @@ from pyboy import windowevent
 from pyboy import PyBoy
 from .. import logger
 from .action import ButtonPress
-from .controller import Controller
+from .emulator import Emulator
 
 
-class PyBoyController(Controller):
+class GameBoy(Emulator):
   # Buttons
   def _abstractPressButton(self, button:ButtonPress) -> None:
     """Presses the specified button
@@ -38,14 +38,64 @@ class PyBoyController(Controller):
     self._screenWidth = 160
     self._screenHeight = 144
 
-    self._registerButton(ButtonPress("A", windowevent.PRESS_BUTTON_A, windowevent.RELEASE_BUTTON_A))
-    self._registerButton(ButtonPress("B", windowevent.PRESS_BUTTON_B, windowevent.RELEASE_BUTTON_B))
-    self._registerButton(ButtonPress("Select", windowevent.PRESS_BUTTON_SELECT, windowevent.RELEASE_BUTTON_SELECT))
-    self._registerButton(ButtonPress("Start", windowevent.PRESS_BUTTON_START, windowevent.RELEASE_BUTTON_START))
-    self._registerButton(ButtonPress("Up", windowevent.PRESS_ARROW_UP, windowevent.RELEASE_ARROW_UP))
-    self._registerButton(ButtonPress("Down", windowevent.PRESS_ARROW_DOWN, windowevent.RELEASE_ARROW_DOWN))
-    self._registerButton(ButtonPress("Left", windowevent.PRESS_ARROW_LEFT, windowevent.RELEASE_ARROW_LEFT))
-    self._registerButton(ButtonPress("Right", windowevent.PRESS_ARROW_RIGHT, windowevent.RELEASE_ARROW_RIGHT))
+    # Button registration
+    self._registerButton(
+      ButtonPress(
+        "A",
+        windowevent.PRESS_BUTTON_A,
+        windowevent.RELEASE_BUTTON_A
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "B",
+        windowevent.PRESS_BUTTON_B,
+        windowevent.RELEASE_BUTTON_B
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "Select",
+        windowevent.PRESS_BUTTON_SELECT,
+        windowevent.RELEASE_BUTTON_SELECT
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "Start",
+        windowevent.PRESS_BUTTON_START,
+        windowevent.RELEASE_BUTTON_START
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "Up",
+        windowevent.PRESS_ARROW_UP,
+        windowevent.RELEASE_ARROW_UP
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "Down",
+        windowevent.PRESS_ARROW_DOWN,
+        windowevent.RELEASE_ARROW_DOWN
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "Left",
+        windowevent.PRESS_ARROW_LEFT,
+        windowevent.RELEASE_ARROW_LEFT
+      )
+    )
+    self._registerButton(
+      ButtonPress(
+        "Right",
+        windowevent.PRESS_ARROW_RIGHT,
+        windowevent.RELEASE_ARROW_RIGHT
+      )
+    )
+
 
   # Running
   def _runForOneFrame(self) -> None:

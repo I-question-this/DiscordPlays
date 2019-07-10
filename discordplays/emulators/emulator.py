@@ -45,11 +45,10 @@ class ScriptedActionNotRecognized(Exception):
 
 
 
-class Controller(ABC):
+class Emulator(ABC):
   """Represents how a controller should behave"""
   # Buttons  
   __buttons = {}
-
 
   @property
   def buttonNames(self) -> List[str]:
@@ -82,7 +81,7 @@ class Controller(ABC):
     ))
     self._abstractPressButton(button)
 
-    
+
   def _registerButton(self, button:ButtonPress) -> None:
     self.__buttons[button.name.lower()] = button
 
