@@ -8,6 +8,7 @@ Discord Controller Settings
 """
 import datetime
 import discord
+import os
 import tempfile
 import time
 from typing import List
@@ -39,6 +40,15 @@ class UnsupportedConsole(Exception):
 
 
 class EmulatorController:
+  # Buttons
+  @property
+  def buttonNames(self):
+      if self._emulator is None:
+          return []
+      else:
+          return self._emulator.buttonNames
+
+
   # Channels
   def deregisterChannel(self, channel:discord.abc.Messageable) -> None:
     if not self._isChannelRegistered:
@@ -103,20 +113,21 @@ class EmulatorController:
 
 
   # Messaging
-  async def _sendMessageToRegisteredChannels(self, messageText, messageFile=None) -> None:
+  async def _sendMessageToRegisteredChannels(self, text, file=None) -> None:
     for channel in self._registeredChannels:
-      await channel.send(messageText, file=messageFile)
+      await channel.send(text, file=file)
  
 
-  async def sendScreenShotGif(self, channel:discord.abc.Messageable) -> None:
+  async def sendScreenShotGif(self) -> None:
     # Create a unique file name
     filePath = os.path.join(
       tempfile.gettempdir(),
        "{}--screenshot.gif".format(datetime.datetime.now())
     )
     # Save the GIF
-    self.controller.makeGIF(filePath)
+    self._emulator.makeGIF(filePath)
     logger.info("{}: Sending screenshot \"{}\"".format(
+      self.__class__.__name__,
       filePath
     ))
     # Send the GIF to all regersted channels
@@ -177,9 +188,9 @@ class EmulatorController:
     return self._isVotingPeriod
 
 
-  async def sendVotingResults(self, chosenButton, channel:discord.abc.Messageable) -> None:
+  async def sendVotingResults(self, chosenButton) -> None:
     messageParts = ["Voting Results:"]
-    messageParts.extend(self.votingBox.voteCounts())
+    messageParts.extend(self._votingBox.voteCounts())
     messageParts.append("Button Pressed: '{}'".format(chosenButton))
     logger.info("{}: {}".format(
       self.__class__.__name__,
@@ -224,12 +235,12 @@ class EmulatorController:
       # Get the majority vote
       resultVote = self._votingBox.majorityVoteResult()
       if resultVote is not None:
-        await self.sendVotingResults(resultVote, channel)
+        await self.sendVotingResults(resultVote)
         button, iterations = resultVote
         for _ in range(iterations):
-          self.controller.pressButton(button)
-        self.controller.runForXSeconds(10)
-        await self.sendScreenShotGif(channel)
+          self._emulator.pressButton(button)
+        self._emulator.runForXSeconds(10)
+        await self.sendScreenShotGif()
       else:
         logger.critical("{}: No votes cast...somehow".format(
           self.__class__.__name__

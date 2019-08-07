@@ -15,6 +15,7 @@ from .emulatorController import ChannelAlreadyRegistered, ChannelNotRegistered
 from .emulatorControllerGroup import ControllerNotFoundByChannel, ControllerNotFoundByIdNumber, EmulatorControllerGroup
 from .gamelibrary import ConsoleType, FileNotFound, FileType, GameLibrary
 from .emulators.action import ButtonPress
+from .emulators.emulator import ButtonNotRecognized
 
 
 # Exceptions
@@ -138,16 +139,18 @@ async def buttonPush(ctx:commands.Context, buttonName:str,
     ctx.message.channel
   )
   # Confrim the controller is running
-  controller.emulator.assertIsRunning
+  if not controller.isRunning:
+      ctx.send("There is nothing running")
   # Confirm the button name
   buttonName = buttonName.lower()
-  if not buttonName in controller.emulator.buttonNames:
-    raise ButtonPress(buttonName)
+  if not buttonName in controller.buttonNames:
+    raise ButtonNotRecognized(buttonName)
   # Conform iterations to a level of sanity
   iterations = min(max(abs(int(iterations)), 1), 50)
-  await controller.voteForButton((buttonName, iterations),
-    ctx.message.author, ctx.message.channel
-  )
+  await controller.voteForButton(
+          (buttonName, iterations),
+          ctx.message.author
+        )
 
 ## Game Library
 @bot.command(
@@ -180,6 +183,17 @@ async def listROMs(ctx:commands.Context, consoleType:ConsoleType=None,
   await ctx.message.channel.send(message)
 
 ## Controller
+def craftControllerStatus(controller):
+  message = "Status: '{}'\n".format(
+    "Running" if controller.isRunning else "Not Running"
+  )
+  message += "Id Number: {}\n".format(controller.idNumber)
+  message += "# Registered Channels: {}".format(
+    controller.numberOfRegisteredChannels
+  )
+  return message
+
+
 @bot.command(
   name="controllerStatus",
   help="Sends status of control of the channel the message was sent from."
@@ -194,14 +208,7 @@ async def controllerStatus(ctx:commands.Context) -> None:
     await ctx.send("Not connected to a controller")
     return None
 
-  message = "Status: '{}'\n".format(
-    "Running" if controller.isRunning else "Not Running"
-  )
-  message += "Id Number: {}\n".format(controller.idNumber)
-  message += "# Registered Channels: {}".format(
-    controller.numberOfRegisteredChannels
-  )
-  await ctx.send(message)
+  await ctx.send(craftControllerStatus(controller))
 
 
 @bot.command(
@@ -214,9 +221,19 @@ async def createNewController(ctx:commands.Context) -> None:
     ctx.message.channel
   )
   if existingController:
+    ctx.send("This channel is already registered to a controller")
     raise ChannelAlreadyRegistered(ctx.message.channel)
 
+  # Create the new controller
   ctx.bot.emulatorControllerGroup.createController(ctx.message.channel)
+  # Find new controller
+  controller = ctx.bot.emulatorControllerGroup.findControllerByChannel(
+    ctx.message.channel
+  )
+  if controller is None:
+      ctx.send("Failed to create controller")
+  else:
+      await ctx.send(craftControllerStatus(controller))
     
 @bot.command(
   name="startROM",
@@ -236,11 +253,11 @@ async def startROM(ctx:commands.Context, consoleType:ConsoleType,
   gameROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.GAMES, gameROM)
   bootROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.BOOTS, bootROM)
   # Specification correct, start the game 
-  game = discord.Game("{}: {}".format(consoleType.value, parameters[1]))
+  game = discord.Game("{}: {}".format(consoleType.value, gameROM))
   await ctx.bot.change_presence(activity=game)
   controller.start(consoleType, gameROMPath, bootROMPath)
   # Send first screen shot
-  await ctx.bot.sendScreenShotGif(ctx.message.channel)
+  await controller.sendScreenShotGif()
   
 
 @bot.command(
