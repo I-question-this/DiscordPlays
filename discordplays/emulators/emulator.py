@@ -45,11 +45,10 @@ class ScriptedActionNotRecognized(Exception):
 
 
 
-class Controller(ABC):
+class Emulator(ABC):
   """Represents how a controller should behave"""
   # Buttons  
   __buttons = {}
-
 
   @property
   def buttonNames(self) -> List[str]:
@@ -82,7 +81,7 @@ class Controller(ABC):
     ))
     self._abstractPressButton(button)
 
-    
+
   def _registerButton(self, button:ButtonPress) -> None:
     self.__buttons[button.name.lower()] = button
 
@@ -164,33 +163,48 @@ class Controller(ABC):
 
   # Starting
   @abstractmethod
-  def _abstractStart(self, gameROMPath:str, bootROMPath:str=None,
-      saveFilePath:str=None) -> None:
+  def _abstractStart(self, gameROMPath:str, bootROMPath:str=None) -> None:
     pass
   
 
   def start(self, gameROMPath:str, bootROMPath:str=None,
-      saveFilePath:str=None, numberOfSecondsToRun:int=60) -> None:
+      saveStateFilePath:str=None, numberOfSecondsToRun:int=60) -> None:
     if numberOfSecondsToRun < 0:
       raise ValueError("numberOfSecondsToRun must be 0 or more")
 
     self.assertNotRunning()
 
-    self._abstractStart(gameROMPath, bootROMPath, saveFilePath)
+    self._abstractStart(gameROMPath, bootROMPath)
+
+    if saveStateFilePath is not None:
+        self.loadState(saveStateFilePath)
 
     self.runForXSeconds(numberOfSecondsToRun)
 
 
   # Stopping 
   @abstractmethod
-  def _abstractStop(self, saveFilePath:str=None):
+  def _abstractStop(self):
     pass
 
 
-  def stop(self, saveFilePath:str=None):
+  def stop(self, saveStateFilePath:str=None):
     self.assertIsRunning()
 
-    self._abstractStop(saveFilePath)
+    if saveStateFilePath is not None:
+        self.saveState(saveStateFilePath)
+    self._abstractStop()
+
+
+  # State Management
+  @abstractmethod
+  def saveState(self, saveStateFilePath:str) -> None:
+      pass
+
+
+  @abstractmethod
+  def loadState(self, saveStateFilePath:str) -> None:
+      pass
 
 
   # Status

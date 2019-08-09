@@ -1,4 +1,3 @@
-abc
-discord
-PIL
+discord.py
+pillow
 pyboy
