@@ -9,78 +9,166 @@ Discord Bot
 import discord
 import discord.ext.commands as commands
 import os
-import tempfile
-import time
 from functools import partial
-from . import logger
-from .controllers.pyboyController import PyBoyController
-from .gamelibrary import ConsoleType, FileType, GameLibrary
-from .votingbox import VotingBox
+from . import logger, version_info
+from .emulatorController import ChannelAlreadyRegistered, ChannelNotRegistered
+from .emulatorControllerGroup import ControllerNotFoundByChannel, ControllerNotFoundByIdNumber, EmulatorControllerGroup
+from .gamelibrary import ConsoleType, FileNotFound, FileType, GameLibrary
+from .emulators.action import ButtonPress
+from .emulators.emulator import ButtonNotRecognized
 
-# Commands
-## Checks
-async def isControllerRunning(ctx):
-  return ctx.bot.controller.isRunning
 
-async def isControllerStopped(ctx):
-  return not ctx.bot.controller.isRunning
+# Exceptions
+class NoPrivateMessages(commands.CheckFailure):
+    pass
 
-async def isVotingPeriodCheck(ctx):
-  return ctx.bot.isVotingPeriod
 
-async def isGuildMessageCheck(ctx):
-  return ctx.message.channel.type == discord.ChannelType.text
+
+# bot intialisation
+description = "Interface to emulators."
+description += "\n Version: {}.{}.{}".format(version_info.major, version_info.minor, version_info.micro)
+bot = commands.Bot(
+  '.',
+  description=description,
+  case_insensitive=True
+)
+
+# The game library
+bot.gameLibrary = GameLibrary()
+
+# The controller of all the emulators
+bot.emulatorControllerGroup = EmulatorControllerGroup()
+
+# Setting status messages
+async def setStatusMessage() -> None:
+ game = discord.Game("Running {} emulators".format(
+   bot.emulatorControllerGroup.numberOfRunningEmulators
+ ))
+ await bot.change_presence(activity=game)
+
+## Context Helper Methods
+def getControllerForMessageContext(ctx:commands.Context):
+  return ctx.bot.emulatorControllerGroup.findControllerByChannel(
+    ctx.message.channel
+  )
+
+# Global Command Checks
+@bot.check
+async def globally_block_dms(ctx:commands.Context):
+  if ctx.guild is None:
+    raise NoPrivateMessages('Hey no DMs!')
+  else:
+    return True
+
+
+# Global Error Check
+@bot.event
+async def on_command_error(context:commands.Context, error:Exception) -> None: 
+  # ChannelAlreadyRegistered
+  if isinstance(error, ChannelAlreadyRegistered):
+    logger.info("{}: User {} attempted to REregister {}:{}".format(
+      context.bot.__class__.__name__,
+      context.message.author,
+      error.channel.guild.name,
+      error.channel.name
+    ))
+  # ChannelNotRegistered
+  if isinstance(error, ChannelNotRegistered):
+    logger.info("{}: User {} attempted '{}' in a NONregistered channel {}:{}".format(
+      context.bot.__class__.__name__,
+      context.message.author,
+      context.invoked_with,
+      error.channel.guild.name,
+      error.channel.name
+    ))
+  # ControllerNotFoundByChannel
+  if isinstance(error, ControllerNotFoundByChannel):
+    logger.info("{}: No controller found for{}:{}".format(
+      context.bot.__class__.__name__,
+      error.channel.guild.name,
+      error.channel.name
+    ))
+  # ControllerNotFoundByIdNumber
+  if isinstance(error, ControllerNotFoundByIdNumber):
+    logger.info("{}: No controller found for id {}".format(
+      context.bot.__class__.__name__,
+      error.idNumber
+    ))
+  # FileNotFound
+  if isinstance(error, FileNotFound):
+    logger.info("{}: File not found: ConsoleType: {}, FileType: {}, FileName: {}".format(
+      context.bot.__class__.__name__,
+      error.consoleType,
+      error.fileType,
+      error.fileName
+    ))
+  # NoPrivateMessagesCheck
+  if isinstance(error, NoPrivateMessages):
+    logger.info("{}: User {} attempted DM.".format(
+      context.bot.__class__.__name__,
+      context.message.author
+    ))
+    await context.send(error)
+    return None
+  # Unknown error, so print to log
+  await commands.Bot.on_command_error(bot, context, error)
+
+
+# Command Checks
+async def isConnectedToController(ctx:commands.Context) -> None:
+  return getControllerForMessageContext(ctx) is not None
+
+async def isEmulatorRunning(ctx:commands.Context) -> None:
+  controller = getControllerForMessageContext(ctx)
+  return controller.isRunning if controller is not None else False
+
+
+async def isVotingPeriod(ctx:commands.Context) -> None:
+  controller = getControllerForMessageContext(ctx)
+  return controller.isVotingPeriod if controller is not None else False
+
 
 ## Buttons
-async def buttonPush(ctx):
-  iterations = " ".join(ctx.message.content.split()[1:])
-  if len(iterations) == 0:
-    iterations = 1
-  else:
-    try:
-      iterations = min(abs(int(iterations)), 10)
-    except ValueError:
-      await ctx.message.channel.send("Can not interpret '{}' as an integer".format(newLength))
-  await ctx.bot.voteForButton((ctx.invoked_with, iterations), ctx.message.author, ctx.message.channel)
+buttonHelpMessage = "Casts vote for pushing a button (iterations) times."
+buttonHelpMessage += "\nOnly usable when a ROM is running"
+@bot.command(
+  name="push",
+  help=buttonHelpMessage
+)
+@commands.check(isVotingPeriod)
+async def buttonPush(ctx:commands.Context, buttonName:str,
+    iterations:int=1) -> None:
+  # Find channel
+  controller = getControllerForMessageContext(ctx) 
+  # Confirm the button name
+  buttonName = buttonName.lower()
+  if not buttonName in controller.buttonNames:
+    raise ButtonNotRecognized(buttonName)
+  # Conform iterations to a level of sanity
+  iterations = min(max(abs(int(iterations)), 1), 50)
+  await controller.voteForButton(
+          (buttonName, iterations),
+          ctx.message.author
+        )
 
-## Controller
-async def listROMs(ctx):
-  parameters = ctx.message.content.split()[1:]
-  # Did they specify anything?
-  if len(parameters) == 0:
-    # Nope, so send everything
-    consoleTypeList = list(ConsoleType)
-    fileTypeList = list(FileType)
+## Game Library
+@bot.command(
+  name="listRoms",
+  help="List avaialbe ROMs"
+)
+async def listROMs(ctx:commands.Context, consoleType:ConsoleType=None,
+     fileType:FileType=None) -> None:
+  if consoleType is None:
+    consoleTypeList = ConsoleType
   else:
-    # They have attempted to specify a console (len >= 1)
-    # Did they specify a correct console?
-    consoleType = ConsoleType.fromString(parameters[0])
-    if consoleType is None:
-      # They screwed up, so cancel
-      return None
-    else:
-      # Save the specified consoleType as the only element in a list
-      consoleTypeList = [consoleType]
-    # Did they specify a specific type of file?
-    if len(parameters) == 1:
-      # Nope, so send every file type
-      fileTypeList = list(FileType)
-    else:
-      # They have attempted to specify a file type (len >= 2)
-      # Did they specify a correct file type?
-      fileType = FileType.fromString(parameters[1])
-      if fileType is None:
-        # They screwed up, so cancel
-        return None
-      else:
-        # Save the specified fileType as the only element in a list
-        fileTypeList = [fileType]
-      # Did they throw in extra garabage, which is not allowed?
-      if len(parameters) > 2:
-        # They screwed up, so cancel
-        return None
+    consoleTypeList = [consoleType]
 
-  # They either specified nothing, or correct things so send the info
+  if fileType is None:
+    fileTypeList = FileType
+  else:
+    fileTypeList = [fileType]
+
+  # Send the info
   message = ""
   for consoleType in consoleTypeList:
     message += "{}::\n".format(consoleType.value)
@@ -93,210 +181,130 @@ async def listROMs(ctx):
 
   await ctx.message.channel.send(message)
 
-async def startController(ctx):
-  parameters = ctx.message.content.split()[1:]
-  # Check they specified <console type> <game ROM name> <boot ROM name>
-  if len(parameters) != 3:
-    # They screwed up, so cancel
-    return None
-  # Check console name
-  consoleType = ConsoleType.fromString(parameters[0])
-  if consoleType is None:
-    # They screwed up, so cancel
-    return None
-  # Construct file paths
-  gameROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.GAMES, parameters[1])
-  bootROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.BOOTS, parameters[2])
-  # Check file paths
-  if gameROMPath is None or bootROMPath is None:
-    # They screwed up, so cancel
-    return None
+## Controller
+def craftControllerStatus(controller):
+  message = "Status: '{}'\n".format(
+    "Running" if controller.isRunning else "Not Running"
+  )
+  message += "Id Number: {}\n".format(controller.idNumber)
+  message += "# Registered Channels: {}".format(
+    controller.numberOfRegisteredChannels
+  )
+  return message
+
+
+@bot.command(
+  name="controllerStatus",
+  help="Sends status of control of the channel the message was sent from."
+)
+async def controllerStatus(ctx:commands.Context) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx) 
+  # Send status
+  await ctx.send(craftControllerStatus(controller) if controller is not None else "Not connected to a controller")
+
+
+@bot.command(
+  name="createController",
+  help="Creates a new controller registered to the message this channel was sent from."
+)
+async def createNewController(ctx:commands.Context) -> None:
+  # determine if this channel is already connected to a controller
+  existingController = getControllerForMessageContext(ctx)
+  if existingController is not None:
+    ctx.send("This channel is already registered to a controller")
+    raise ChannelAlreadyRegistered(ctx.message.channel)
+
+  # Create the new controller
+  ctx.bot.emulatorControllerGroup.createController(ctx.message.channel)
+  # Find new controller
+  controller = getControllerForMessageContext(ctx)
+  if controller is None:
+      ctx.send("Failed to create controller")
+  else:
+      await ctx.send(craftControllerStatus(controller))
+    
+@bot.command(
+  name="startROM",
+  help="Starts a ROM on the conroller of the channel the message was sent to"
+)
+@commands.check(isConnectedToController)
+async def startROM(ctx:commands.Context, consoleType:ConsoleType,
+        gameROM: str, bootROM: str, saveFileName:str=None) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+
+  # Construct file paths, errors if path not correct
+  gameROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.GAMES, gameROM)
+  bootROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.BOOTS, bootROM)
+  if saveFileName is not None:
+    try:
+      saveFilePath = ctx.bot.gameLibrary.filePath(consoleType, FileType.SAVES, saveFileName)
+      newSaveFile = False
+    except FileNotFound:
+        saveFilePath = ctx.bot.gameLibrary.filePath(consoleType, FileType.SAVES, saveFileName, True)
+        newSaveFile = True
+  else:
+    saveFilePath = None
+    newSaveFile = False
   # Specification correct, start the game 
-  game = discord.Game("{}: {}".format(consoleType.value, parameters[1]))
-  await ctx.bot.change_presence(activity=game)
-  ctx.bot.controller.start(gameROMPath, bootROMPath)
-  await ctx.bot.sendScreenShotGif(ctx.message.channel)
+  await setStatusMessage()
+  controller.start(consoleType, gameROMPath, bootROMPath, saveFilePath, newSaveFile)
+  # Send first screen shot
+  await controller.sendScreenShotGif()
   
-  async def startController(self, gameROMName, gameROMPath):
-    self.controller.start(gameROMPath, bootROMByName("DMG_ROM").path)
-    game = discord.Game(gameROMName)
-    await self.change_presence(activity=game)
 
-async def stopController(ctx):
-  await ctx.bot.stopController()
+@bot.command(
+  name="stopROM",
+  help="Stops the ROM on the conroller of the channel the message was sent to"
+)
+@commands.check(isEmulatorRunning)
+async def stopROM(ctx:commands.Context) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+  # Stop emulator
+  controller.stop()
+  await setStatusMessage()
 
-## Voting
-async def setVotingPeriodLength(ctx):
-  newLength = " ".join(ctx.message.content.split()[1:])
-  try:
-    newLength = max(int(newLength), 1)
-  except ValueError:
-    await ctx.message.channel.send("Can not interpret '{}' as an integer".format(newLength))
-  
-  ctx.bot.votingPeriodLength = newLength
-  logger.info("Changed votingPeriodLength to '{}'".format(newLength))
-  await ctx.message.channel.send("Set voting period length to '{}'".format(newLength))
+@bot.command(
+  name="saveState",
+  help="Saves the state to name given or the previously specified name."
+)
+@commands.check(isEmulatorRunning)
+async def saveState(ctx:commands.Context, saveStateName:str=None) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+  # Stop emulator
+  if saveStateName is not None:
+      controller.saveStateFilePath = ctx.bot.gameLibrary.filePath(controller.consoleType, FileType.SAVES, saveStateName, True)
 
-## The bot
-class Bot(commands.Bot):
-  # The controller interface to the player
-  controller = PyBoyController()
-  # The game library
-  gameLibrary = GameLibrary()
-  # Standard messages
-  idleActivity = "Nothing.gb"
-  # Voting state information
-  isVotingPeriod = True
-  isFirstVote = True
-  votingPeriodLength = 3
-  votingBox = VotingBox()
+  if controller.saveStateFilePath is None:
+      await ctx.send("No prioer save state file name specified, can not save with implicit name")
 
-  # Helper methods
-  ## Voting
-  def castVote(self, author, button):
-    logger.info("Bot: '{}' cast vote for '{}'".format(author, button))
-    self.votingBox.castVote(author, button)
+  controller.saveState()
+  await ctx.send("State saved to: {}".format(controller.saveStateFilePath))
 
-  async def voteForButton(self, vote, author, channel):
-    # Quit if votes can not be cast at this time
-    if not self.isVotingPeriod:
-      return None
-    # Vote
-    if not self.isFirstVote:
-      self.castVote(author, vote)
-    else:
-      # Turn off isFirstVote
-      self.isFirstVote = False
-      logger.info("Bot: User '{}' started voting period".format(author))
-      self.castVote(author, vote)
-      # Wait for voting period to end
-      time.sleep(self.votingPeriodLength)
-      self.isVotingPeriod = False
-      logger.info("Bot: Voting is over")
-      # Get the majority vote
-      resultVote = self.votingBox.majorityVoteResult()
-      if resultVote is not None:
-        await self.sendVotingResults(resultVote, channel)
-        button, iterations = resultVote
-        for _ in range(iterations):
-          self.controller.pressButton(button)
-        self.controller.runForXSeconds(10)
-        await self.sendScreenShotGif(channel)
-      else:
-        logger.critical("Bot: No votes cast...somehow")
-      # Reset voting box
-      self.votingBox = VotingBox()
-      # Reset isFirstVote
-      self.isFirstVote = True
-      # Turning voting back on
-      self.isVotingPeriod = True
-      logger.info("Bot: Voting is starting")
-
-
-  # Controller interaction
-  async def sendScreenShotGif(self, channel):
-    filePath = os.path.join(tempfile.gettempdir(), "screenshot.gif")
-    self.controller.makeGIF(filePath)
-    logger.info("Bot: Sending screenshot \"{}\"".format(filePath))
-    await channel.send("", file=discord.File(filePath, "screenshot.gif"))
-
-
-  async def sendVotingResults(self, chosenButton, channel):
-    messageParts = ["Voting Results:"]
-    messageParts.extend(self.votingBox.voteCounts())
-    messageParts.append("Button Pressed: '{}'".format(chosenButton))
-    logger.info("Bot: {}".format(". ".join(messageParts)))
-    await channel.send("\n".join(messageParts))
-
-  
-  async def stopController(self):
-    self.controller.stop()
-    game = discord.Game(self.idleActivity)
-    await self.change_presence(activity=game)
-
-  # Commands
-  def addCommands(self):
-    # Buttons
-    buttonHelpMessage = "Casts vote for button '{}'."
-    buttonHelpMessage += "\nOnly usable when a ROM is running"
-    for button in self.controller.buttonNames:
-      self.add_command(
-        commands.Command(
-          buttonPush, 
-          name=button,
-          help=buttonHelpMessage.format(button),
-          checks=[
-            isControllerRunning,
-            isVotingPeriodCheck,
-            isGuildMessageCheck
-          ]
-        )
-      )
-
-    # ROMs
-    self.add_command(
-      commands.Command(
-        listROMs,
-        name="listROMs",
-        help="List avialable ROMs",
-        usage="<optional: console type> <optional: file type>",
-        checks=[
-          isGuildMessageCheck
-        ]
-      )
-    )
-    self.add_command(
-      commands.Command(
-        startController,
-        name="startROM",
-        help="Starts the specified ROM",
-        usage="<console type> <game ROM name> <boot ROM name>",
-        checks=[
-          isControllerStopped,
-          isGuildMessageCheck
-        ]
-      )
-    )
-    self.add_command(
-      commands.Command(
-        stopController,
-        name="stopROM",
-        help="Starts the currently running ROM",
-        checks=[
-          isControllerRunning,
-          isGuildMessageCheck
-        ]
-      )
-    )
-    # Voting
-    self.add_command(
-      commands.Command(
-        setVotingPeriodLength,
-        name="setVotingPeriodLength",
-        help="Change the length of seconds for votes.\nMinimum is 1",
-        usage="<number of seconds>",
-        checks=[
-          isGuildMessageCheck
-        ]
-      )
-    )
  
+@bot.command(
+  name="setVotingPeriodLength",
+  help="Change the length of seconds for votes.\nMinimum is 1"
+)
+@commands.check(isConnectedToController)
+async def setVotingPeriodLength(ctx:commands.Context, length:int) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+  # Sanatize the number
+  length = max(length)
+  controller.setVotingPeriodLength()
 
-  # Discord client event registration
-  async def close(self):
-    if self.controller.isRunning:
-      logger.info("Bot: Shutting down controller")
-      await self.stopController()
-    game = discord.Game("Down for Server Maintenance")
-    await self.change_presence(
-      activity=game,
-      status=discord.Status.offline
-    )
+    
+@bot.event
+async def close() -> None:
+  bot.emulatorControllerGroup.stopAll()
 
-  async def on_ready(self):
-    self.controller = PyBoyController()
-    self.addCommands()
-    # Set status
-    game = discord.Game(self.idleActivity)
-    await self.change_presence(activity=game)
+
+@bot.event
+async def on_ready() -> None:
+  # Set status
+  await setStatusMessage()
 

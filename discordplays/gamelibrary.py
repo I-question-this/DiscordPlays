@@ -40,6 +40,16 @@ class FileType(EnumFromString):
 
 
 
+# Exceptions for this class
+class FileNotFound(Exception):
+  """Thrown when a file is not found"""
+  def __init__(self, consoleType:ConsoleType, fileType:FileType, fileName:str):
+    self.consoleType = consoleType
+    self.fileType = fileType
+    self.fileName = fileName
+
+
+
 class GameLibrary():
   """Provides easy access to ROM library"""
   # Directories
@@ -57,13 +67,13 @@ class GameLibrary():
     return [f for f in os.listdir(filesDir) if f != ".gitkeep" and os.path.isfile(os.path.join(filesDir, f))]
 
 
-  def filePath(self, consoleType:ConsoleType, fileType:FileType, fileName) -> str:
+  def filePath(self, consoleType:ConsoleType, fileType:FileType, fileName:str, ignoreNonExistence:bool=False) -> str:
     fPath = os.path.join(self._fileTypeDir(consoleType, fileType), fileName)
 
-    if os.path.isfile(fPath):
+    if os.path.isfile(fPath) or ignoreNonExistence:
       return fPath
     else:
-      return None
+      raise FileNotFound(consoleType, fileType, fileName)
 
 
   # Magic Methods

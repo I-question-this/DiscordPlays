@@ -11,7 +11,7 @@ __title__ = 'discordplays'
 __author__ = 'i-question-this'
 __license__ = 'GPL-3.0'
 __copyright__ = 'Copyright 2019 i-question-this'
-__version__ = '0.10.0'
+__version__ = '0.12.0'
 
 from collections import namedtuple
 
@@ -20,7 +20,7 @@ import logging
 
 VersionInfo = namedtuple('VersionInfo', 'major minor micro')
 
-version_info = VersionInfo(major=0, minor=10, micro=0)
+version_info = VersionInfo(major=0, minor=12, micro=0)
 
 # Set up logging for Discord
 logger = logging.getLogger('discord')
