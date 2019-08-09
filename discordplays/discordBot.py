@@ -40,11 +40,17 @@ bot.gameLibrary = GameLibrary()
 bot.emulatorControllerGroup = EmulatorControllerGroup()
 
 # Setting status messages
-#def setStatusMessage() -> None:
-#  game = discord.Game("Running {} emulators".format(
-#    bot.emulatorControllerGroup.numberOfControllers
-#  ))
-#  await bot.change_presence(activity=game)
+async def setStatusMessage() -> None:
+ game = discord.Game("Running {} emulators".format(
+   bot.emulatorControllerGroup.numberOfRunningEmulators
+ ))
+ await bot.change_presence(activity=game)
+
+## Context Helper Methods
+def getControllerForMessageContext(ctx:commands.Context):
+  return ctx.bot.emulatorControllerGroup.findControllerByChannel(
+    ctx.message.channel
+  )
 
 # Global Command Checks
 @bot.check
@@ -109,20 +115,17 @@ async def on_command_error(context:commands.Context, error:Exception) -> None:
 
 
 # Command Checks
-async def isControllerRunning(ctx:commands.Context) -> None:
-  return ctx.bot.controller.isRunning
+async def isConnectedToController(ctx:commands.Context) -> None:
+  return getControllerForMessageContext(ctx) is not None
+
+async def isEmulatorRunning(ctx:commands.Context) -> None:
+  controller = getControllerForMessageContext(ctx)
+  return controller.isRunning if controller is not None else False
 
 
-async def isControllerStopped(ctx:commands.Context) -> None:
-  return not ctx.bot.controller.isRunning
-
-
-async def isVotingPeriodCheck(ctx:commands.Context) -> None:
-  return ctx.bot.isVotingPeriod
-
-
-async def isGuildMessageCheck(ctx:commands.Context) -> None:
-  return ctx.message.channel.type == discord.ChannelType.text
+async def isVotingPeriod(ctx:commands.Context) -> None:
+  controller = getControllerForMessageContext(ctx)
+  return controller.isVotingPeriod if controller is not None else False
 
 
 ## Buttons
@@ -132,15 +135,11 @@ buttonHelpMessage += "\nOnly usable when a ROM is running"
   name="push",
   help=buttonHelpMessage
 )
+@commands.check(isVotingPeriod)
 async def buttonPush(ctx:commands.Context, buttonName:str,
     iterations:int=1) -> None:
   # Find channel
-  controller = ctx.bot.emulatorControllerGroup.findControllerByChannel(
-    ctx.message.channel
-  )
-  # Confrim the controller is running
-  if not controller.isRunning:
-      ctx.send("There is nothing running")
+  controller = getControllerForMessageContext(ctx) 
   # Confirm the button name
   buttonName = buttonName.lower()
   if not buttonName in controller.buttonNames:
@@ -200,15 +199,9 @@ def craftControllerStatus(controller):
 )
 async def controllerStatus(ctx:commands.Context) -> None:
   # Find controller
-  controller = ctx.bot.emulatorControllerGroup.findControllerByChannel(
-    ctx.message.channel
-  )
-  if controller is None:
-    # If not connected then send that as the status
-    await ctx.send("Not connected to a controller")
-    return None
-
-  await ctx.send(craftControllerStatus(controller))
+  controller = getControllerForMessageContext(ctx) 
+  # Send status
+  await ctx.send(craftControllerStatus(controller) if controller is not None else "Not connected to a controller")
 
 
 @bot.command(
@@ -217,19 +210,15 @@ async def controllerStatus(ctx:commands.Context) -> None:
 )
 async def createNewController(ctx:commands.Context) -> None:
   # determine if this channel is already connected to a controller
-  existingController = ctx.bot.emulatorControllerGroup.findControllerByChannel(
-    ctx.message.channel
-  )
-  if existingController:
+  existingController = getControllerForMessageContext(ctx)
+  if existingController is not None:
     ctx.send("This channel is already registered to a controller")
     raise ChannelAlreadyRegistered(ctx.message.channel)
 
   # Create the new controller
   ctx.bot.emulatorControllerGroup.createController(ctx.message.channel)
   # Find new controller
-  controller = ctx.bot.emulatorControllerGroup.findControllerByChannel(
-    ctx.message.channel
-  )
+  controller = getControllerForMessageContext(ctx)
   if controller is None:
       ctx.send("Failed to create controller")
   else:
@@ -239,23 +228,28 @@ async def createNewController(ctx:commands.Context) -> None:
   name="startROM",
   help="Starts a ROM on the conroller of the channel the message was sent to"
 )
+@commands.check(isConnectedToController)
 async def startROM(ctx:commands.Context, consoleType:ConsoleType,
-    gameROM: str, bootROM: str) -> None:
+        gameROM: str, bootROM: str, saveFileName:str=None) -> None:
   # Find controller
-  controller = ctx.bot.emulatorControllerGroup.findControllerByChannel(
-    ctx.message.channel
-  )
-  # If no controller then error out
-  if controller is None:
-    raise ChannelNotRegistered(ctx.message.channel)
+  controller = getControllerForMessageContext(ctx)
 
   # Construct file paths, errors if path not correct
   gameROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.GAMES, gameROM)
   bootROMPath = ctx.bot.gameLibrary.filePath(consoleType, FileType.BOOTS, bootROM)
+  if saveFileName is not None:
+    try:
+      saveFilePath = ctx.bot.gameLibrary.filePath(consoleType, FileType.SAVES, saveFileName)
+      newSaveFile = False
+    except FileNotFound:
+        saveFilePath = ctx.bot.gameLibrary.filePath(consoleType, FileType.SAVES, saveFileName, True)
+        newSaveFile = True
+  else:
+    saveFilePath = None
+    newSaveFile = False
   # Specification correct, start the game 
-  game = discord.Game("{}: {}".format(consoleType.value, gameROM))
-  await ctx.bot.change_presence(activity=game)
-  controller.start(consoleType, gameROMPath, bootROMPath)
+  await setStatusMessage()
+  controller.start(consoleType, gameROMPath, bootROMPath, saveFilePath, newSaveFile)
   # Send first screen shot
   await controller.sendScreenShotGif()
   
@@ -264,30 +258,41 @@ async def startROM(ctx:commands.Context, consoleType:ConsoleType,
   name="stopROM",
   help="Stops the ROM on the conroller of the channel the message was sent to"
 )
+@commands.check(isEmulatorRunning)
 async def stopROM(ctx:commands.Context) -> None:
   # Find controller
-  controller = ctx.bot.emulatorControllerGroup.findControllerByChannel(
-    ctx.message.channel
-  )
-  # If no controller then error out
-  if controller is None:
-    raise ChannelNotRegistered(ctx.message.channel)
+  controller = getControllerForMessageContext(ctx)
   # Stop emulator
   controller.stop()
+  await setStatusMessage()
+
+@bot.command(
+  name="saveState",
+  help="Saves the state to name given or the previously specified name."
+)
+@commands.check(isEmulatorRunning)
+async def saveState(ctx:commands.Context, saveStateName:str=None) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+  # Stop emulator
+  if saveStateName is not None:
+      controller.saveStateFilePath = ctx.bot.gameLibrary.filePath(controller.consoleType, FileType.SAVES, saveStateName, True)
+
+  if controller.saveStateFilePath is None:
+      await ctx.send("No prioer save state file name specified, can not save with implicit name")
+
+  controller.saveState()
+  await ctx.send("State saved to: {}".format(controller.saveStateFilePath))
 
  
 @bot.command(
   name="setVotingPeriodLength",
   help="Change the length of seconds for votes.\nMinimum is 1"
 )
+@commands.check(isConnectedToController)
 async def setVotingPeriodLength(ctx:commands.Context, length:int) -> None:
   # Find controller
-  controller = ctx.bot.emulatorcontrollergroup.findControllerByChannel(
-    ctx.message.channel
-  )
-  # If no controller then error out
-  if controller is None:
-    raise ChannelNotRegistered(ctx.message.channel)
+  controller = getControllerForMessageContext(ctx)
   # Sanatize the number
   length = max(length)
   controller.setVotingPeriodLength()
@@ -301,6 +306,5 @@ async def close() -> None:
 @bot.event
 async def on_ready() -> None:
   # Set status
-  #setStatusMessage()
-  pass
+  await setStatusMessage()
 

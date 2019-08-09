@@ -101,6 +101,7 @@ class GameBoy(Emulator):
   def _runForOneFrame(self) -> None:
     self._pyboy.tick()
 
+
   # Screenshots
   def _abstractTakeScreenShot(self) -> Image:
     """Takes screen shot of emulator
@@ -113,15 +114,24 @@ class GameBoy(Emulator):
 
 
   # Starting
-  def _abstractStart(self, gameROM, bootROM, saveFilePath:str=None):
+  def _abstractStart(self, gameROM, bootROM):
     self._pyboy = PyBoy(None, 3, gameROM, bootROM)
     self._pyboy.setEmulationSpeed(False)
 
 
   # Stopping
-  def _abstractStop(self, saveFilePath:str=None) -> None:
+  def _abstractStop(self) -> None:
     self._pyboy.stop(save=True)
     self._pyboy = None
+
+
+  # State Management
+  def loadState(self, saveStateFilePath:str) -> None:
+      self._pyboy.loadState(saveStateFilePath)
+
+
+  def saveState(self, saveStateFilePath:str) -> None:
+      self._pyboy.saveState(saveStateFilePath)
 
   # Status
   @property

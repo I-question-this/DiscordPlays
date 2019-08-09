@@ -31,6 +31,9 @@ class ChannelNotRegistered(Exception):
     self.channel = channel
 
 
+class SaveStateFileNotSpecified(Exception):
+  """Thrown when attempting to save without a save-state file specified"""
+
 
 class UnsupportedConsole(Exception):
   """Thrown when attempting to use an unsupported console"""
@@ -88,6 +91,11 @@ class EmulatorController:
     return list(cls._supportedConsoles.keys())
 
 
+  @property
+  def consoleType(self) -> ConsoleType:
+      return self._consoleType
+
+
   # Id Number
   @property
   def idNumber(self):
@@ -101,7 +109,8 @@ class EmulatorController:
 
     # Emulaator
     self._emulator = None
-
+    self._saveFilePath = None
+    self._consoleType = None
     # Id Number
     self._idNumber = idNumber
 
@@ -139,7 +148,37 @@ class EmulatorController:
     os.remove(filePath)
 
 
+  # Save action
+  def loadState(self):
+      self._emulator.assertIsRunning()
+      if self.saveStateFilePath is not None:
+        self._emulator.loadState(self.saveStateFilePath)
+      else:
+        raise SaveStateFileNotSpecified()
+
+
+  def saveState(self):
+      self._emulator.assertIsRunning()
+      if self.saveStateFilePath is not None:
+        self._emulator.saveState(self.saveStateFilePath)
+      else:
+        raise SaveStateFileNotSpecified()
+
+
+  # SaveStateFilePath property
+  @property
+  def saveStateFilePath(self):
+      return self._saveStateFilePath
+
+
+  @saveStateFilePath.setter
+  def saveStateFilePath(self, newSaveStateFilePath):
+      self._emulator.assertIsRunning()
+      self._saveStateFilePath = newSaveStateFilePath
+
+
   # Status
+  @property
   def isRunning(self):
     if self._emulator is None:
       return False
@@ -149,7 +188,7 @@ class EmulatorController:
 
   # Start
   def start(self, consoleType:ConsoleType, gameROMPath:str,
-      bootROMPath:str):
+          bootROMPath:str, saveStateFilePath:str=None, newSaveStateFile:bool=False):
     # Confirm there is not an already running emulator 
     if self._emulator is not None:
       self._emulator.assertNotRunning()
@@ -157,11 +196,16 @@ class EmulatorController:
     # Confirm we support the choosen console type
     if consoleType in self.supportedConsoles():
       self._emulator = self._supportedConsoles[consoleType]()
+      self._consoleType = consoleType
     else:
       raise UnsupportedConsole(consoleType)
-   
+ 
+    # Is save file new?
+    loadSaveStateFilePath = None if saveStateFilePath is not None and newSaveStateFile else saveStateFilePath
     # Start the specified game
-    self._emulator.start(gameROMPath, bootROMPath)
+    self._emulator.start(gameROMPath, bootROMPath, loadSaveStateFilePath)
+    # Record saveFilePath
+    self.saveStateFilePath = saveStateFilePath
 
 
   # Stop
@@ -170,7 +214,9 @@ class EmulatorController:
     if self._emulator is not None:
       if self._emulator.isRunning:
         # Stop the emulator
-        self._emulator.stop()
+        self._emulator.stop(self.saveStateFilePath)
+        # Reset the saveFilePath
+        self._saveFilePath = None
 
  
   # Voting

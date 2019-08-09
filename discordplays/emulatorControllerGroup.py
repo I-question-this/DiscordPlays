@@ -75,20 +75,27 @@ class EmulatorControllerGroup:
         return controller
     return None
 
+
   def findControllerById(self, idNumber:int) -> None:
     for controller in self._emulatorControllers:
       if controller.idNumber == idNumber:
         return controller
     return None
 
+
   @property
   def numberOfControllers(self) -> int:
     return len(self._emulatorControllers)
 
 
+  @property
+  def numberOfRunningEmulators(self) -> int:
+    return sum([1 if emCo.isRunning else 0 for emCo in self._emulatorControllers])
+
+
   def stopAll(self) -> None:
     for controller in self._emulatorControllers:
-      if controller.isRunning():
+      if controller.isRunning:
         controller.stop()
 
 
