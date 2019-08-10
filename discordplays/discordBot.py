@@ -284,18 +284,34 @@ async def saveState(ctx:commands.Context, saveStateName:str=None) -> None:
   controller.saveState()
   await ctx.send("State saved to: {}".format(controller.saveStateFilePath))
 
- 
+minBP = 0.5
+maxBP = 10
+@bot.command(
+  name="setNumberOfSecondsAfterButtonPress",
+  help="Change the length of seconds after a button press.\nMinimum is {}\nMaximum is {}".format(minBP, maxBP)
+)
+@commands.check(isConnectedToController)
+async def setNumberOfSecondsAfterButtonPress(ctx:commands.Context, length:float) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+  # Sanatize the number
+  length = min(max(length, minBP), maxBP)
+  await controller.setNumberOfSecondsAfterButtonPress(length)
+
+
+minVL = 0
+maxVL = 10
 @bot.command(
   name="setVotingPeriodLength",
-  help="Change the length of seconds for votes.\nMinimum is 1"
+  help="Change the length of seconds for votes.\nMinimum is {}\nMaximum is {}".format(minVL, maxVL)
 )
 @commands.check(isConnectedToController)
 async def setVotingPeriodLength(ctx:commands.Context, length:int) -> None:
   # Find controller
   controller = getControllerForMessageContext(ctx)
   # Sanatize the number
-  length = max(length)
-  controller.setVotingPeriodLength()
+  length = min(max(length, minVL), maxVL)
+  await controller.setVotingPeriodLength(length)
 
     
 @bot.event

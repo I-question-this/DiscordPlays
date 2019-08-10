@@ -52,6 +52,25 @@ class EmulatorController:
           return self._emulator.buttonNames
 
 
+  @property
+  def numberOfSecondsAfterButtonPress(self) -> float:
+      self._numberOfSecondsAfterButtonPress
+
+
+  async def setNumberOfSecondsAfterButtonPress(self, newLength:float) -> None:
+    # Check value
+    if newLength < 0:
+        raise ValueError("numberOfSecondsAfterButtonPress can not be less than 0")
+    # Set value
+    self._numberOfSecondsAfterButtonPress = newLength
+    # Inform users of the change
+    await self._sendMessageToRegisteredChannels(
+      "Set seconds after button press(s) to '{}'".format(
+        newLength
+      )
+    )
+
+
   # Channels
   def deregisterChannel(self, channel:discord.abc.Messageable) -> None:
     if not self._isChannelRegistered:
@@ -111,6 +130,7 @@ class EmulatorController:
     self._emulator = None
     self._saveFilePath = None
     self._consoleType = None
+    self._numberOfSecondsAfterButtonPress = 10
     # Id Number
     self._idNumber = idNumber
 
@@ -246,12 +266,14 @@ class EmulatorController:
 
 
   async def setVotingPeriodLength(self, newLength:int) -> None:
+    # Check value
+    if newLength < 0:
+        raise ValueError("votingPeriodLength can not be less than 0")
     # Make change
     self._votingPeriodLength = newLength
-    # inform users of the change
+    # Inform users of the change
     await self._sendMessageToRegisteredChannels(
-      "{}: Set voting period length to '{}'".format(
-        ctx.bot.__class__.__name__,
+      "Set voting period length to '{}'".format(
         newLength
       )
     )
@@ -285,7 +307,7 @@ class EmulatorController:
         button, iterations = resultVote
         for _ in range(iterations):
           self._emulator.pressButton(button)
-        self._emulator.runForXSeconds(10)
+        self._emulator.runForXSeconds(self._numberOfSecondsAfterButtonPress)
         await self.sendScreenShotGif()
       else:
         logger.critical("{}: No votes cast...somehow".format(

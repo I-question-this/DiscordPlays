@@ -12,6 +12,7 @@ from PIL import Image
 from typing import List
 from .action import ButtonPress
 from .. import logger
+import math
 
 # Exceptions for this class
 class AlreadyRunning(Exception):
@@ -125,7 +126,8 @@ class Emulator(ABC):
 
     self.assertIsRunning()
 
-    self.runForXFrames(numberOfSeconds * self._fps)
+    numFrames = int(math.ceil(numberOfSeconds * self._fps))
+    self.runForXFrames(numFrames)
 
 
   # Screenshots
