@@ -11,15 +11,24 @@ from PIL import Image
 from pyboy import windowevent
 from pyboy import PyBoy
 from .. import logger
-from .action import ButtonPress
-from .emulator import Emulator
+from .emulator import ButtonCode, Emulator
 
 
 class GameBoy(Emulator):
   # Buttons
-  def _abstractPressButton(self, button:ButtonPress) -> None:
+  def _abstractHoldButton(self, button:ButtonCode, numberOfSeconds:float) -> None:
+    """Holds the specified button for the specififed time
+    """
+    logger.info("PyBoy: Pressing button: {}".format(button.name))
+    self._pyboy.sendInput(button.pressCode)
+    self.runForXSeconds(numberOfSeconds)
+    logger.info("PyBoy: Releasing button: {}".format(button.name))
+    self._pyboy.sendInput(button.releaseCode)
+    self.runForXSeconds(1)
+
+
+  def _abstractPressButton(self, button:ButtonCode) -> None:
     """Presses the specified button
-    button_events: tuple(press<button>, release<button>
     """
     logger.info("PyBoy: Pressing button: {}".format(button.name))
     self._pyboy.sendInput(button.pressCode)
@@ -28,7 +37,6 @@ class GameBoy(Emulator):
     self._pyboy.sendInput(button.releaseCode)
     self.runForXSeconds(1)
     
-
 
   # Magic methods
   def __init__(self, screenWidth:int=160, screenHeight:int=144):
@@ -40,56 +48,56 @@ class GameBoy(Emulator):
 
     # Button registration
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "A",
         windowevent.PRESS_BUTTON_A,
         windowevent.RELEASE_BUTTON_A
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "B",
         windowevent.PRESS_BUTTON_B,
         windowevent.RELEASE_BUTTON_B
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "Select",
         windowevent.PRESS_BUTTON_SELECT,
         windowevent.RELEASE_BUTTON_SELECT
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "Start",
         windowevent.PRESS_BUTTON_START,
         windowevent.RELEASE_BUTTON_START
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "Up",
         windowevent.PRESS_ARROW_UP,
         windowevent.RELEASE_ARROW_UP
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "Down",
         windowevent.PRESS_ARROW_DOWN,
         windowevent.RELEASE_ARROW_DOWN
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "Left",
         windowevent.PRESS_ARROW_LEFT,
         windowevent.RELEASE_ARROW_LEFT
       )
     )
     self._registerButton(
-      ButtonPress(
+      ButtonCode(
         "Right",
         windowevent.PRESS_ARROW_RIGHT,
         windowevent.RELEASE_ARROW_RIGHT

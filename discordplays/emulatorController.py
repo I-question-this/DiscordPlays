@@ -13,6 +13,7 @@ import tempfile
 import time
 from typing import List
 from . import logger
+from .emulators.action import Action, ActionNotRecognized
 from .emulators.gameBoy import GameBoy
 from .gamelibrary import ConsoleType, FileType
 from .votingbox import VotingBox
@@ -253,6 +254,16 @@ class EmulatorController:
   def isVotingPeriod(self) -> bool:
     return self._isVotingPeriod
 
+  def _restartVoting(self) -> None:
+      # Reset voting box
+      self._votingBox = VotingBox()
+      # Reset isFirstVote
+      self._isFirstVote = True
+      # Turning voting back on
+      self._isVotingPeriod = True
+      logger.info("{}: Voting is starting".format(
+        self.__class__.__name__
+      ))
 
   async def sendVotingResults(self, chosenButton) -> None:
     messageParts = ["Voting Results:"]
@@ -304,22 +315,22 @@ class EmulatorController:
       resultVote = self._votingBox.majorityVoteResult()
       if resultVote is not None:
         await self.sendVotingResults(resultVote)
-        button, iterations = resultVote
-        for _ in range(iterations):
-          self._emulator.pressButton(button)
+        actionType, button, x = resultVote
+        # Perform the button action
+        if actionType == Action.PRESS: 
+            for _ in range(x):
+                self._emulator.pressButton(button)
+        elif actionType == Action.HOLD:
+            self._emulator.holdButton(button, x)
+        else:
+            self._restartVoting()
+            raise ActionNotRecognized(actionType)
+        # Run emulator after button press(s)
         self._emulator.runForXSeconds(self._numberOfSecondsAfterButtonPress)
         await self.sendScreenShotGif()
       else:
         logger.critical("{}: No votes cast...somehow".format(
           self.__class__.__name__
         ))
-      # Reset voting box
-      self._votingBox = VotingBox()
-      # Reset isFirstVote
-      self._isFirstVote = True
-      # Turning voting back on
-      self._isVotingPeriod = True
-      logger.info("{}: Voting is starting".format(
-        self.__class__.__name__
-      ))
+      self._restartVoting()
 

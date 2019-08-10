@@ -10,7 +10,7 @@ Abstract contract of what a controller should do.
 from abc import ABC, abstractmethod
 from PIL import Image
 from typing import List
-from .action import ButtonPress
+from .action import Action, Action
 from .. import logger
 import math
 
@@ -39,10 +39,27 @@ class NotRunning(Exception):
 
 
 
-class ScriptedActionNotRecognized(Exception):
-  """Thrown when a button is not recognized"""
-  def __init__(self, scriptedActionName: str):
-    self.scriptedActionName = scriptedActionName
+class ButtonCode:
+  """The class the represents a button press and realease"""
+  def __init__(self, name:str, pressCode: any, releaseCode: any=None):
+    self._name = name
+    self._pressCode = pressCode
+    self._releaseCode = releaseCode
+
+  
+  @property
+  def name(self) -> str:
+      return self._name
+
+
+  @property
+  def pressCode(self) -> any:
+    return self._pressCode
+
+
+  @property
+  def releaseCode(self) -> any:
+    return self._releaseCode
 
 
 
@@ -57,7 +74,12 @@ class Emulator(ABC):
 
 
   @abstractmethod
-  def _abstractPressButton(self, button:ButtonPress) -> None:
+  def _abstractHoldButton(self, button:ButtonCode, numberOfSeconds:float) -> None:
+    pass
+
+
+  @abstractmethod
+  def _abstractPressButton(self, button:ButtonCode) -> None:
     pass
 
 
@@ -72,6 +94,20 @@ class Emulator(ABC):
       raise ButtonNotReconized(buttonName)
 
 
+  def holdButton(self, buttonName:str, numberOfSeconds:float) -> None:
+    self.assertIsRunning()
+    if numberOfSeconds < 0:
+        raise ValueError("numberOfSeconds must be greater than 0")
+    button = self._getButton(buttonName)
+
+    logger.info("{}: Holding button {} for {} seconds".format(
+      self.__class__.__name__,
+      button.name,
+      numberOfSeconds
+    ))
+    self._abstractHoldButton(button, numberOfSeconds)
+
+
   def pressButton(self, buttonName:str) -> None:
     self.assertIsRunning()
     button = self._getButton(buttonName)
@@ -83,7 +119,7 @@ class Emulator(ABC):
     self._abstractPressButton(button)
 
 
-  def _registerButton(self, button:ButtonPress) -> None:
+  def _registerButton(self, button:ButtonCode) -> None:
     self.__buttons[button.name.lower()] = button
 
   

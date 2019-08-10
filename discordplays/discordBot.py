@@ -14,8 +14,8 @@ from . import logger, version_info
 from .emulatorController import ChannelAlreadyRegistered, ChannelNotRegistered
 from .emulatorControllerGroup import ControllerNotFoundByChannel, ControllerNotFoundByIdNumber, EmulatorControllerGroup
 from .gamelibrary import ConsoleType, FileNotFound, FileType, GameLibrary
-from .emulators.action import ButtonPress
-from .emulators.emulator import ButtonNotRecognized
+from .emulators.action import Action
+from .emulators.emulator import ButtonCode, ButtonNotRecognized
 
 
 # Exceptions
@@ -129,8 +129,35 @@ async def isVotingPeriod(ctx:commands.Context) -> None:
 
 
 ## Buttons
+minHold = 1
+maxHold = 10
+buttonHelpMessage = "Casts vote for holding a button for 'x' seconds."
+buttonHelpMessage += "\nMinimum is {}.\nMaximum is {}".format(minHold, maxHold)
+@bot.command(
+  name="hold",
+  help=buttonHelpMessage
+)
+@commands.check(isVotingPeriod)
+async def buttonHold(ctx:commands.Context, buttonName:str,
+    seconds:int=3) -> None:
+  # Find channel
+  controller = getControllerForMessageContext(ctx) 
+  # Confirm the button name
+  buttonName = buttonName.lower()
+  if not buttonName in controller.buttonNames:
+    raise ButtonNotRecognized(buttonName)
+  # Conform iterations to a level of sanity
+  seconds = min(max(seconds, minHold), maxHold)
+  await controller.voteForButton(
+          (Action.HOLD, buttonName, seconds),
+          ctx.message.author
+        )
+
+
+minPush = 1
+maxPush = 25
 buttonHelpMessage = "Casts vote for pushing a button (iterations) times."
-buttonHelpMessage += "\nOnly usable when a ROM is running"
+buttonHelpMessage += "\nMinimum is {}.\nMaximum is {}".format(minPush, maxPush)
 @bot.command(
   name="push",
   help=buttonHelpMessage
@@ -145,11 +172,12 @@ async def buttonPush(ctx:commands.Context, buttonName:str,
   if not buttonName in controller.buttonNames:
     raise ButtonNotRecognized(buttonName)
   # Conform iterations to a level of sanity
-  iterations = min(max(abs(int(iterations)), 1), 50)
+  iterations = min(max(iterations, minPush), maxPush)
   await controller.voteForButton(
-          (buttonName, iterations),
+          (Action.PRESS, buttonName, iterations),
           ctx.message.author
         )
+
 
 ## Game Library
 @bot.command(
