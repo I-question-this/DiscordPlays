@@ -14,8 +14,8 @@ from . import logger, version_info
 from .emulatorController import ChannelAlreadyRegistered, ChannelNotRegistered
 from .emulatorControllerGroup import ControllerNotFoundByChannel, ControllerNotFoundByIdNumber, EmulatorControllerGroup
 from .gamelibrary import ConsoleType, FileNotFound, FileType, GameLibrary
-from .emulators.action import ButtonPress
-from .emulators.emulator import ButtonNotRecognized
+from .emulators.action import Action
+from .emulators.emulator import ButtonCode, ButtonNotRecognized
 
 
 # Exceptions
@@ -129,8 +129,35 @@ async def isVotingPeriod(ctx:commands.Context) -> None:
 
 
 ## Buttons
+minHold = 1
+maxHold = 10
+buttonHelpMessage = "Casts vote for holding a button for 'x' seconds."
+buttonHelpMessage += "\nMinimum is {}.\nMaximum is {}".format(minHold, maxHold)
+@bot.command(
+  name="hold",
+  help=buttonHelpMessage
+)
+@commands.check(isVotingPeriod)
+async def buttonHold(ctx:commands.Context, buttonName:str,
+    seconds:int=3) -> None:
+  # Find channel
+  controller = getControllerForMessageContext(ctx) 
+  # Confirm the button name
+  buttonName = buttonName.lower()
+  if not buttonName in controller.buttonNames:
+    raise ButtonNotRecognized(buttonName)
+  # Conform iterations to a level of sanity
+  seconds = min(max(seconds, minHold), maxHold)
+  await controller.voteForButton(
+          (Action.HOLD, buttonName, seconds),
+          ctx.message.author
+        )
+
+
+minPush = 1
+maxPush = 25
 buttonHelpMessage = "Casts vote for pushing a button (iterations) times."
-buttonHelpMessage += "\nOnly usable when a ROM is running"
+buttonHelpMessage += "\nMinimum is {}.\nMaximum is {}".format(minPush, maxPush)
 @bot.command(
   name="push",
   help=buttonHelpMessage
@@ -145,11 +172,12 @@ async def buttonPush(ctx:commands.Context, buttonName:str,
   if not buttonName in controller.buttonNames:
     raise ButtonNotRecognized(buttonName)
   # Conform iterations to a level of sanity
-  iterations = min(max(abs(int(iterations)), 1), 50)
+  iterations = min(max(iterations, minPush), maxPush)
   await controller.voteForButton(
-          (buttonName, iterations),
+          (Action.PRESS, buttonName, iterations),
           ctx.message.author
         )
+
 
 ## Game Library
 @bot.command(
@@ -284,18 +312,34 @@ async def saveState(ctx:commands.Context, saveStateName:str=None) -> None:
   controller.saveState()
   await ctx.send("State saved to: {}".format(controller.saveStateFilePath))
 
- 
+minBP = 0.5
+maxBP = 10
+@bot.command(
+  name="setNumberOfSecondsAfterButtonPress",
+  help="Change the length of seconds after a button press.\nMinimum is {}\nMaximum is {}".format(minBP, maxBP)
+)
+@commands.check(isConnectedToController)
+async def setNumberOfSecondsAfterButtonPress(ctx:commands.Context, length:float) -> None:
+  # Find controller
+  controller = getControllerForMessageContext(ctx)
+  # Sanatize the number
+  length = min(max(length, minBP), maxBP)
+  await controller.setNumberOfSecondsAfterButtonPress(length)
+
+
+minVL = 0
+maxVL = 10
 @bot.command(
   name="setVotingPeriodLength",
-  help="Change the length of seconds for votes.\nMinimum is 1"
+  help="Change the length of seconds for votes.\nMinimum is {}\nMaximum is {}".format(minVL, maxVL)
 )
 @commands.check(isConnectedToController)
 async def setVotingPeriodLength(ctx:commands.Context, length:int) -> None:
   # Find controller
   controller = getControllerForMessageContext(ctx)
   # Sanatize the number
-  length = max(length)
-  controller.setVotingPeriodLength()
+  length = min(max(length, minVL), maxVL)
+  await controller.setVotingPeriodLength(length)
 
     
 @bot.event
