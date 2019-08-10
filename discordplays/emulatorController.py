@@ -13,6 +13,7 @@ import tempfile
 import time
 from typing import List
 from . import logger
+from .emulators.action import Action, ActionNotRecognized
 from .emulators.gameBoy import GameBoy
 from .gamelibrary import ConsoleType, FileType
 from .votingbox import VotingBox
@@ -50,6 +51,25 @@ class EmulatorController:
           return []
       else:
           return self._emulator.buttonNames
+
+
+  @property
+  def numberOfSecondsAfterButtonPress(self) -> float:
+      self._numberOfSecondsAfterButtonPress
+
+
+  async def setNumberOfSecondsAfterButtonPress(self, newLength:float) -> None:
+    # Check value
+    if newLength < 0:
+        raise ValueError("numberOfSecondsAfterButtonPress can not be less than 0")
+    # Set value
+    self._numberOfSecondsAfterButtonPress = newLength
+    # Inform users of the change
+    await self._sendMessageToRegisteredChannels(
+      "Set seconds after button press(s) to '{}'".format(
+        newLength
+      )
+    )
 
 
   # Channels
@@ -111,6 +131,7 @@ class EmulatorController:
     self._emulator = None
     self._saveFilePath = None
     self._consoleType = None
+    self._numberOfSecondsAfterButtonPress = 10
     # Id Number
     self._idNumber = idNumber
 
@@ -233,6 +254,16 @@ class EmulatorController:
   def isVotingPeriod(self) -> bool:
     return self._isVotingPeriod
 
+  def _restartVoting(self) -> None:
+      # Reset voting box
+      self._votingBox = VotingBox()
+      # Reset isFirstVote
+      self._isFirstVote = True
+      # Turning voting back on
+      self._isVotingPeriod = True
+      logger.info("{}: Voting is starting".format(
+        self.__class__.__name__
+      ))
 
   async def sendVotingResults(self, chosenButton) -> None:
     messageParts = ["Voting Results:"]
@@ -246,12 +277,14 @@ class EmulatorController:
 
 
   async def setVotingPeriodLength(self, newLength:int) -> None:
+    # Check value
+    if newLength < 0:
+        raise ValueError("votingPeriodLength can not be less than 0")
     # Make change
     self._votingPeriodLength = newLength
-    # inform users of the change
+    # Inform users of the change
     await self._sendMessageToRegisteredChannels(
-      "{}: Set voting period length to '{}'".format(
-        ctx.bot.__class__.__name__,
+      "Set voting period length to '{}'".format(
         newLength
       )
     )
@@ -282,22 +315,22 @@ class EmulatorController:
       resultVote = self._votingBox.majorityVoteResult()
       if resultVote is not None:
         await self.sendVotingResults(resultVote)
-        button, iterations = resultVote
-        for _ in range(iterations):
-          self._emulator.pressButton(button)
-        self._emulator.runForXSeconds(10)
+        actionType, button, x = resultVote
+        # Perform the button action
+        if actionType == Action.PRESS: 
+            for _ in range(x):
+                self._emulator.pressButton(button)
+        elif actionType == Action.HOLD:
+            self._emulator.holdButton(button, x)
+        else:
+            self._restartVoting()
+            raise ActionNotRecognized(actionType)
+        # Run emulator after button press(s)
+        self._emulator.runForXSeconds(self._numberOfSecondsAfterButtonPress)
         await self.sendScreenShotGif()
       else:
         logger.critical("{}: No votes cast...somehow".format(
           self.__class__.__name__
         ))
-      # Reset voting box
-      self._votingBox = VotingBox()
-      # Reset isFirstVote
-      self._isFirstVote = True
-      # Turning voting back on
-      self._isVotingPeriod = True
-      logger.info("{}: Voting is starting".format(
-        self.__class__.__name__
-      ))
+      self._restartVoting()
 

@@ -6,36 +6,18 @@ Actions describing what is being requested of a controller.
 :copyright: (c) 2019 i-question-this
 :license: GPL-3.0, see LICENSE for more details.
 """
-from abc import ABC, abstractmethod
+from enum import Enum, unique
 
-class Action(ABC):
+
+@unique
+class Action(Enum):
   """Represents what controllers should respond to"""
-  @abstractmethod
-  def __init__(self):
-    pass
-
-
-  @property
-  def name(self) -> str:
-    return self._name
+  PRESS = "press"
+  HOLD = "hold"
 
 
 
-
-class ButtonPress(Action):
-  """The class the represents a button press and realease"""
-  def __init__(self, name:str, pressCode: any, releaseCode: any=None):
-    self._name = name
-    self._pressCode = pressCode
-    self._releaseCode = releaseCode
-
-
-  @property
-  def pressCode(self) -> any:
-    return self._pressCode
-
-
-  @property
-  def releaseCode(self) -> any:
-    return self._releaseCode
-
+class ActionNotRecognized(Exception):
+  """Thrown when a voted upon action was not recognized"""
+  def __init__(self, action:Action):
+      self.action = action
