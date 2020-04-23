@@ -1,3 +1,6 @@
+# **DEPRECATED**
+Please see [https://github.com/I-question-this/red-bot-cog-emulator](https://github.com/I-question-this/red-bot-cog-emulator)
+
 # DiscordPlays
 
 ## Emulator
